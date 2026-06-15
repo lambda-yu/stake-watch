@@ -34,4 +34,7 @@ class StablecoinRiskSnapshot(BaseModel):
     supply_change_24h_pct: float
     supply_change_7d_pct: float
     risk_level: str
+    risk_score: float = 0.0       # 0-100 composite score
+    hard_trigger: str | None = None  # if hard trigger fired
+    cex_spread_pct: float = 0.0   # CEX spread
     updated_at: datetime

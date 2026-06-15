@@ -113,5 +113,8 @@ class StablecoinMetricsRow(Base):
     supply_change_7d_pct: Mapped[float] = mapped_column(Float)
     risk_level: Mapped[str] = mapped_column(String(20))
     chain_data_json: Mapped[str] = mapped_column(Text, default="[]")
+    risk_score: Mapped[float] = mapped_column(Float, default=0.0)
+    hard_trigger: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    cex_spread_pct: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     __table_args__ = (Index("ix_stablecoin_token", "token"),)

@@ -180,6 +180,9 @@ class Storage:
                 supply_change_24h_pct=snapshot.supply_change_24h_pct,
                 supply_change_7d_pct=snapshot.supply_change_7d_pct,
                 risk_level=snapshot.risk_level,
+                risk_score=getattr(snapshot, "risk_score", 0.0),
+                hard_trigger=getattr(snapshot, "hard_trigger", None),
+                cex_spread_pct=getattr(snapshot, "cex_spread_pct", 0.0),
                 chain_data_json=json.dumps([]),
                 updated_at=snapshot.updated_at)
             session.add(row)
@@ -206,4 +209,7 @@ class Storage:
                 supply_change_24h_pct=r.supply_change_24h_pct,
                 supply_change_7d_pct=r.supply_change_7d_pct,
                 risk_level=r.risk_level,
+                risk_score=r.risk_score or 0.0,
+                hard_trigger=r.hard_trigger,
+                cex_spread_pct=r.cex_spread_pct or 0.0,
                 updated_at=r.updated_at) for r in rows]
