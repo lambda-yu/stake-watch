@@ -75,7 +75,7 @@ export function Stablecoins() {
 
       {/* Current Status */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {['USDC', 'USDT'].map(token => {
+        {['USDC', 'USDT', 'USD0', 'USD1'].map(token => {
           const snap = snapshots.find(s => s.token === token);
           const riskClass = snap ? RISK_COLORS[snap.risk_level] || RISK_COLORS.safe : 'bg-gray-800 text-gray-400 border-gray-700';
           return (

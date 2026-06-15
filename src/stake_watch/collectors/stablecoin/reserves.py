@@ -21,8 +21,8 @@ class ReserveReport(BaseModel):
     updated_at: datetime
 
 
-REPORT_CADENCE = {"USDC": 30, "USDT": 90}
-ISSUERS = {"USDC": "Circle", "USDT": "Tether"}
+REPORT_CADENCE = {"USDC": 30, "USDT": 90, "USD0": 30, "USD1": 30}
+ISSUERS = {"USDC": "Circle", "USDT": "Tether", "USD0": "Usual Protocol", "USD1": "World Liberty Financial"}
 
 
 def evaluate_reserve_risk(

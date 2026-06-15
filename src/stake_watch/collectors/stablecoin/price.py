@@ -17,6 +17,14 @@ COINBASE_URL = "https://api.coinbase.com/v2/exchange-rates"
 KRAKEN_URL = "https://api.kraken.com/0/public/Ticker"
 OKX_URL = "https://www.okx.com/api/v5/market/ticker"
 
+TOKENS = ["USDC", "USDT", "USD0", "USD1"]
+
+COINGECKO_IDS = {
+    "USDC": "usd-coin", "USDT": "tether",
+    "USD0": "usual-usd", "USD1": "usd1-wlfi",
+}
+DEFILLAMA_SYMBOLS = {"USDC", "USDT", "USD0", "USD1"}
+
 
 class StablecoinPriceCollector:
     async def collect_prices(self) -> list[StablecoinPrice]:
@@ -29,7 +37,7 @@ class StablecoinPriceCollector:
             ("OKX", self._fetch_okx),
         ]
 
-        all_prices: dict[str, list[tuple[str, float]]] = {"USDC": [], "USDT": []}
+        all_prices: dict[str, list[tuple[str, float]]] = {t: [] for t in TOKENS}
         change_24h: dict[str, float] = {}
 
         for source_name, fetcher in fetchers:
@@ -44,7 +52,7 @@ class StablecoinPriceCollector:
                 logger.debug(f"Price source {source_name} failed: {e}")
 
         results = []
-        for token in ["USDC", "USDT"]:
+        for token in TOKENS:
             prices = all_prices[token]
             if not prices:
                 continue
@@ -64,13 +72,14 @@ class StablecoinPriceCollector:
 
     async def _fetch_coingecko(self) -> dict:
         async with httpx.AsyncClient(timeout=10) as client:
+            ids = ",".join(COINGECKO_IDS.values())
             resp = await client.get(COINGECKO_URL, params={
-                "ids": "usd-coin,tether", "vs_currencies": "usd",
+                "ids": ids, "vs_currencies": "usd",
                 "include_24hr_change": "true"})
             resp.raise_for_status()
             data = resp.json()
         result = {}
-        for token, gecko_id in [("USDC", "usd-coin"), ("USDT", "tether")]:
+        for token, gecko_id in COINGECKO_IDS.items():
             if gecko_id in data:
                 result[token] = {
                     "price": data[gecko_id].get("usd", 1.0),
@@ -85,28 +94,36 @@ class StablecoinPriceCollector:
         result = {}
         for asset in data.get("peggedAssets", []):
             symbol = asset.get("symbol", "")
-            if symbol in ["USDC", "USDT"]:
+            if symbol in DEFILLAMA_SYMBOLS:
                 price = asset.get("price")
                 if price is not None:
                     result[symbol] = {"price": price}
         return result
 
     async def _fetch_binance(self) -> dict:
+        result = {}
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(BINANCE_URL, params={"symbol": "USDCUSDT"})
-            resp.raise_for_status()
-            usdc_usdt = float(resp.json()["price"])
-        return {"USDC": {"price": usdc_usdt}}
+            for token, symbol in [("USDC", "USDCUSDT"), ("USD1", "USD1USDT")]:
+                try:
+                    resp = await client.get(BINANCE_URL, params={"symbol": symbol})
+                    resp.raise_for_status()
+                    result[token] = {"price": float(resp.json()["price"])}
+                except Exception:
+                    pass
+        return result
 
     async def _fetch_coinbase(self) -> dict:
         result = {}
         async with httpx.AsyncClient(timeout=10) as client:
-            for token, currency in [("USDC", "USDC"), ("USDT", "USDT")]:
-                resp = await client.get(COINBASE_URL, params={"currency": currency})
-                resp.raise_for_status()
-                usd_rate = resp.json().get("data", {}).get("rates", {}).get("USD")
-                if usd_rate:
-                    result[token] = {"price": float(usd_rate)}
+            for token in ["USDC", "USDT"]:
+                try:
+                    resp = await client.get(COINBASE_URL, params={"currency": token})
+                    resp.raise_for_status()
+                    usd_rate = resp.json().get("data", {}).get("rates", {}).get("USD")
+                    if usd_rate:
+                        result[token] = {"price": float(usd_rate)}
+                except Exception:
+                    pass
         return result
 
     async def _fetch_kraken(self) -> dict:

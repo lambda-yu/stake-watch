@@ -19,7 +19,7 @@ class StablecoinSupplyCollector:
         results = []
         for asset in data.get("peggedAssets", []):
             symbol = asset.get("symbol", "")
-            if symbol not in ("USDC", "USDT"):
+            if symbol not in ("USDC", "USDT", "USD0", "USD1"):
                 continue
 
             total = Decimal(str(asset.get("circulating", {}).get("peggedUSD", 0)))

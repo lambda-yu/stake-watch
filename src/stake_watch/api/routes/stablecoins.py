@@ -31,7 +31,7 @@ async def get_reserves(storage: Storage = Depends(get_storage), store: ConfigSto
     supply_map = {s.token: s.total_supply for s in snapshots}
 
     results = []
-    for token in ["USDC", "USDT"]:
+    for token in ["USDC", "USDT", "USD0", "USD1"]:
         report_date = await store.get_setting(f"reserves.{token.lower()}.report_date")
         last_fetched = await store.get_setting(f"reserves.{token.lower()}.last_fetched")
         total_reserves_raw = await store.get_setting(f"reserves.{token.lower()}.total_reserves")

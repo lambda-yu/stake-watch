@@ -108,7 +108,7 @@ async def send_stablecoin_report(storage: Storage):
         from decimal import Decimal
         supply_map = {s.token: s.total_supply for s in snapshots}
         reserve_list = []
-        for token in ["USDC", "USDT"]:
+        for token in ["USDC", "USDT", "USD0", "USD1"]:
             report_date = await config_store.get_setting(f"reserves.{token.lower()}.report_date")
             total_raw = await config_store.get_setting(f"reserves.{token.lower()}.total_reserves")
             total = Decimal(str(total_raw)) if total_raw else None

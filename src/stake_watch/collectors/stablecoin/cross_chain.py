@@ -17,6 +17,12 @@ STABLECOIN_WHITELIST = {
         "bsc": [{"address": "0x55d398326f99059fF775485246999027B3197955", "type": "native", "risk_premium": 0}],
         "solana": [{"address": "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", "type": "native", "risk_premium": 0}],
     },
+    "USD0": {
+        "ethereum": [{"address": "0x73a15fed60bf67631dc6cd7bc5b6e8da8190acf5", "type": "native", "risk_premium": 0}],
+    },
+    "USD1": {
+        "ethereum": [{"address": "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d", "type": "native", "risk_premium": 0}],
+    },
 }
 
 class VerificationResult(BaseModel):
