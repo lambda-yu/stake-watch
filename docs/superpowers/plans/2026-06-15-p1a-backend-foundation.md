@@ -1,12 +1,14 @@
-# Stake Watch P1: Foundation Implementation Plan
+# Stake Watch P1a: Backend Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the working foundation — config system, data models, SQLite storage, BaseCollector, DefiLlama collector, scheduler — so the tool can collect and persist real DeFi protocol data on a schedule.
+**Goal:** Build the working backend foundation — config (DB-stored), data models, SQLite storage, BaseCollector, DefiLlama collector, scheduler — so the tool can collect and persist real DeFi protocol data on a schedule. Config is stored in DB and seeded from `config/seed.yaml` on first startup. The frontend config UI is in P1b.
 
-**Architecture:** Python async application using `uv` for dependency management, Pydantic models for data, SQLAlchemy + SQLite for persistence, APScheduler for cron-style collection. Config is YAML-based with local overrides and env var secrets. DefiLlama API is the first collector (no RPC needed), proving the full pipeline end-to-end.
+**Architecture:** Python async application using `uv` for dependency management, Pydantic models for data, SQLAlchemy + SQLite for persistence, APScheduler for cron-style collection. Config is DB-stored (not YAML) with seed.yaml for first-time initialization. FastAPI app and React frontend are in P1b.
 
 **Tech Stack:** Python 3.12+, uv, pydantic, pydantic-settings, SQLAlchemy 2.0 (async), aiosqlite, httpx, APScheduler, PyYAML, pytest, pytest-asyncio
+
+**Note:** This is P1a. P1b (FastAPI config API + React frontend) follows immediately after.
 
 ---
 
@@ -1958,24 +1960,11 @@ Expected: Real DefiLlama data for Aave V3 Base is persisted in SQLite.
 
 ## Scope Notes
 
-### What P1 delivers
-P1 proves the full pipeline end-to-end: config → collector → storage → scheduler. **DefiLlama is the universal first collector** — it provides TVL and yield data for all 10 protocols without needing any RPC keys or chain-specific SDKs.
+### What P1a delivers
+P1a proves the full backend pipeline end-to-end: config (DB-stored) → collector → storage → scheduler. **DefiLlama is the universal first collector** — it provides TVL and yield data for all 10 protocols without needing any RPC keys or chain-specific SDKs. Config is loaded from DB; `config/seed.yaml` populates the DB on first startup.
 
-### What P1 defers to P1.5
-On-chain protocol-specific collectors (Aave V3 Base, Morpho Base, Jupiter Lend) are deferred to a follow-up plan. These require:
-- Chain-specific SDKs (web3.py, solana-py)
-- Paid RPC endpoints
-- Contract ABI definitions
-- Per-wallet position reading via on-chain calls
+### What P1b delivers (next plan)
+FastAPI config API + React + TypeScript frontend with config management pages (Settings, Protocols, Dashboard). All config CRUD through REST API and web UI.
 
-### Protocol→DefiLlama slug mapping
-Currently hardcoded in `DEFILLAMA_SLUG_MAP` in `main.py`. Should be moved to `protocols.yaml` as a `defillama_slug` field per protocol entry in P1.5 when more collectors are added.
-
-### Position history
-P1 uses upsert (unique index) — only latest position is kept. Time-series history tables for trend detection (needed by risk rules like "TVL crash >15% in 1h") will be added in P2 when the risk engine is built.
-
-### Models deferred
-`models/alert.py` and `models/stablecoin.py` from the spec are not needed in P1 (no risk engine yet). They will be added in P2 and P3a respectively.
-
-### pytest-asyncio config
-Uses `asyncio_mode = "auto"` which auto-detects async fixtures. If issues arise, add explicit `@pytest_asyncio.fixture` decorators.
+### What is deferred to P1.5
+On-chain protocol-specific collectors (Aave V3 Base, Morpho Base, Jupiter Lend) require chain-specific SDKs, paid RPC endpoints, contract ABIs, and per-wallet position reading.
