@@ -63,3 +63,73 @@ class MorphoSharePriceRule(BaseRule):
                 created_at=datetime.now(timezone.utc),
             )
         return None
+
+
+class MorphoBadDebtRule(BaseRule):
+    """Potential bad debt at -20% > 1% of vault assets → warning, > 3% → critical"""
+
+    rule_type = RuleType.MORPHO
+    severity = Severity.WARNING
+    cooldown = timedelta(hours=1)
+
+    def evaluate(self, ctx: RuleContext) -> Alert | None:
+        pct = ctx.get("worst_case_bad_debt_pct", 0)
+        if pct > 0.03:
+            return Alert(
+                rule_type=self.rule_type,
+                severity=Severity.CRITICAL,
+                protocol=ctx["protocol"],
+                chain=ctx["chain"],
+                title="Morpho Bad Debt Critical",
+                message=f"Potential bad debt at -20%: {pct:.1%} of vault assets",
+                details={"worst_case_bad_debt_pct": pct},
+                created_at=datetime.now(timezone.utc),
+            )
+        if pct > 0.01:
+            return Alert(
+                rule_type=self.rule_type,
+                severity=Severity.WARNING,
+                protocol=ctx["protocol"],
+                chain=ctx["chain"],
+                title="Morpho Bad Debt Warning",
+                message=f"Potential bad debt at -20%: {pct:.1%} of vault assets",
+                details={"worst_case_bad_debt_pct": pct},
+                created_at=datetime.now(timezone.utc),
+            )
+        return None
+
+
+class MorphoGovernanceRule(BaseRule):
+    """Governance changes detected → info, critical changes → critical"""
+
+    rule_type = RuleType.MORPHO
+    severity = Severity.INFO
+    cooldown = timedelta(hours=6)
+    CRITICAL_EVENTS = {"SetCurator", "SetGuardian"}
+
+    def evaluate(self, ctx: RuleContext) -> Alert | None:
+        events = ctx.get("governance_events", [])
+        if not events:
+            return None
+        critical = [e for e in events if e.get("event_type") in self.CRITICAL_EVENTS]
+        if critical:
+            return Alert(
+                rule_type=self.rule_type,
+                severity=Severity.CRITICAL,
+                protocol=ctx["protocol"],
+                chain=ctx["chain"],
+                title="Morpho Critical Governance Change",
+                message=f"Detected: {', '.join(e['event_type'] for e in critical)}",
+                details={"events": critical},
+                created_at=datetime.now(timezone.utc),
+            )
+        return Alert(
+            rule_type=self.rule_type,
+            severity=Severity.INFO,
+            protocol=ctx["protocol"],
+            chain=ctx["chain"],
+            title="Morpho Governance Event",
+            message=f"Detected: {', '.join(e.get('event_type', '?') for e in events)}",
+            details={"events": events},
+            created_at=datetime.now(timezone.utc),
+        )
