@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -83,7 +84,9 @@ class DexLiquidityCollector:
     async def collect_pools(self) -> list[DexPoolSnapshot]:
         results = []
         async with httpx.AsyncClient(timeout=15) as client:
-            for pool in MONITORED_POOLS:
+            for i, pool in enumerate(MONITORED_POOLS):
+                if i > 0:
+                    await asyncio.sleep(0.5)
                 try:
                     url = GECKOTERMINAL_POOL_URL.format(
                         network=pool["network"], address=pool["address"])
