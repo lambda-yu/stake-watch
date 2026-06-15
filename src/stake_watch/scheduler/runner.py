@@ -93,6 +93,22 @@ class ScheduledRunner:
                 await config_store.set_setting("reserves.usdc.total_supply_live", supply)
                 await config_store.set_setting("reserves.usdc.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
+            # USD0/USD1 via DefiLlama supply
+            try:
+                from stake_watch.collectors.stablecoin.supply import StablecoinSupplyCollector
+                supply_collector = StablecoinSupplyCollector()
+                supplies = await supply_collector.collect_supply()
+                for s in supplies:
+                    if s.token in ("USD0", "USD1"):
+                        tl = s.token.lower()
+                        sv = float(s.total_circulating)
+                        await config_store.set_setting(f"reserves.{tl}.total_reserves", sv)
+                        await config_store.set_setting(f"reserves.{tl}.total_supply_live", sv)
+                        await config_store.set_setting(f"reserves.{tl}.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
+                        await config_store.set_setting(f"reserves.{tl}.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+            except Exception:
+                pass
+
             logger.info(f"Reserves fetched: USDT={'OK' if tether else 'FAIL'} USDC={'OK' if circle else 'FAIL'}")
         except Exception as e:
             logger.error(f"Reserves fetch failed: {e}")

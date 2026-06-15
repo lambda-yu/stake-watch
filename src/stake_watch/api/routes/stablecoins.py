@@ -131,6 +131,8 @@ async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
                 await store.set_setting(f"reserves.{token_lower}.total_supply_live", supply_val)
                 await store.set_setting(f"reserves.{token_lower}.last_fetched",
                     datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
+                await store.set_setting(f"reserves.{token_lower}.report_date",
+                    datetime.now(timezone.utc).strftime("%Y-%m-%d"))
                 issuer_info = {
                     "USD0": {"_来源": "DefiLlama (Usual Protocol, RWA 国债抵押, Chainlink PoR)", "短期国债": 100},
                     "USD1": {"_来源": "DefiLlama (World Liberty Financial, BitGo 托管, Chainlink PoR)", "国债+货币基金": 100},
