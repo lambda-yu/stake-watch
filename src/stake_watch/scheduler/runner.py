@@ -42,11 +42,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 class ScheduledRunner:
     def __init__(self, collection_runner: CollectionRunner, position_interval: int = 300,
                  stats_interval: int = 900, stablecoin_report_interval: int = 3600,
+                 dex_liquidity_interval: int = 300, reserves_fetch_interval: int = 21600,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
         self.stats_interval = stats_interval
         self.stablecoin_report_interval = stablecoin_report_interval
+        self.dex_liquidity_interval = dex_liquidity_interval
+        self.reserves_fetch_interval = reserves_fetch_interval
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
@@ -59,6 +62,39 @@ class ScheduledRunner:
         from stake_watch.alerts.stablecoin_report import send_stablecoin_report
         await send_stablecoin_report(self.storage)
 
+    async def _refresh_dex_liquidity(self):
+        try:
+            from stake_watch.collectors.stablecoin.dex_liquidity import DexLiquidityCollector
+            collector = DexLiquidityCollector()
+            pools = await collector.collect_pools()
+            logger.info(f"DEX liquidity refreshed: {len(pools)} pools")
+        except Exception as e:
+            logger.error(f"DEX liquidity refresh failed: {e}")
+
+    async def _fetch_reserves(self):
+        if not self.storage:
+            return
+        try:
+            from stake_watch.collectors.stablecoin.reserves_fetcher import fetch_tether_reserves, fetch_circle_supply
+            from stake_watch.storage.config_store import ConfigStore
+            from datetime import datetime, timezone
+            config_store = ConfigStore(self.storage._session_factory)
+
+            tether = await fetch_tether_reserves()
+            if tether:
+                await config_store.set_setting("reserves.usdt.total_reserves", float(tether["total_assets"]))
+                await config_store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
+                await config_store.set_setting("reserves.usdt.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+            circle = await fetch_circle_supply()
+            if circle:
+                await config_store.set_setting("reserves.usdc.total_supply_live", float(circle["total_supply"]))
+                await config_store.set_setting("reserves.usdc.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+
+            logger.info(f"Reserves fetched: USDT={'OK' if tether else 'FAIL'} USDC={'OK' if circle else 'FAIL'}")
+        except Exception as e:
+            logger.error(f"Reserves fetch failed: {e}")
+
     def start(self):
         self._scheduler.add_job(self.collection_runner.run_collection_cycle,
             trigger=IntervalTrigger(seconds=self.position_interval),
@@ -69,6 +105,18 @@ class ScheduledRunner:
                 trigger=IntervalTrigger(seconds=self.stablecoin_report_interval),
                 id="stablecoin_report", name="Stablecoin report", replace_existing=True)
             logger.info(f"Stablecoin report every {self.stablecoin_report_interval}s")
+
+        if self.dex_liquidity_interval > 0:
+            self._scheduler.add_job(self._refresh_dex_liquidity,
+                trigger=IntervalTrigger(seconds=self.dex_liquidity_interval),
+                id="dex_liquidity", name="DEX liquidity", replace_existing=True)
+            logger.info(f"DEX liquidity every {self.dex_liquidity_interval}s")
+
+        if self.reserves_fetch_interval > 0 and self.storage:
+            self._scheduler.add_job(self._fetch_reserves,
+                trigger=IntervalTrigger(seconds=self.reserves_fetch_interval),
+                id="reserves_fetch", name="Reserves fetch", replace_existing=True)
+            logger.info(f"Reserves fetch every {self.reserves_fetch_interval}s")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")

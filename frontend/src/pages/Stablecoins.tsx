@@ -406,28 +406,46 @@ export function Stablecoins() {
             </label>
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-400">推送间隔</label>
-            <select
-              value={reportConfig.interval}
-              onChange={async e => {
-                const interval = Number(e.target.value);
-                const r = await api.stablecoins.updateReportConfig({ interval });
-                setReportConfig(r);
-              }}
-              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
-            >
-              <option value={1800}>30 分钟</option>
-              <option value={3600}>1 小时</option>
-              <option value={7200}>2 小时</option>
-              <option value={14400}>4 小时</option>
-              <option value={21600}>6 小时</option>
-              <option value={43200}>12 小时</option>
-              <option value={86400}>24 小时</option>
-            </select>
-            <span className="text-xs text-gray-600">
-              每 {reportConfig.interval >= 3600 ? `${reportConfig.interval / 3600} 小时` : `${reportConfig.interval / 60} 分钟`} 推送一次
-            </span>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">报告推送间隔</label>
+              <select value={reportConfig.interval}
+                onChange={async e => { setReportConfig(await api.stablecoins.updateReportConfig({ interval: Number(e.target.value) })); }}
+                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-full">
+                <option value={1800}>30 分钟</option>
+                <option value={3600}>1 小时</option>
+                <option value={7200}>2 小时</option>
+                <option value={14400}>4 小时</option>
+                <option value={21600}>6 小时</option>
+                <option value={43200}>12 小时</option>
+                <option value={86400}>24 小时</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">DEX 流动性刷新</label>
+              <select value={reportConfig.dex_liquidity_interval || 300}
+                onChange={async e => { setReportConfig(await api.stablecoins.updateReportConfig({ dex_liquidity_interval: Number(e.target.value) })); }}
+                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-full">
+                <option value={60}>1 分钟</option>
+                <option value={300}>5 分钟</option>
+                <option value={600}>10 分钟</option>
+                <option value={1800}>30 分钟</option>
+                <option value={3600}>1 小时</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 block mb-1">储备自动抓取</label>
+              <select value={reportConfig.reserves_fetch_interval || 21600}
+                onChange={async e => { setReportConfig(await api.stablecoins.updateReportConfig({ reserves_fetch_interval: Number(e.target.value) })); }}
+                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-full">
+                <option value={3600}>1 小时</option>
+                <option value={7200}>2 小时</option>
+                <option value={14400}>4 小时</option>
+                <option value={21600}>6 小时</option>
+                <option value={43200}>12 小时</option>
+                <option value={86400}>24 小时</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -448,7 +466,7 @@ export function Stablecoins() {
             </button>
             {reportResult && (
               <span className={`text-sm ${reportResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                {reportResult.success ? '已发送，请查看 Telegram' : `失败: ${reportResult.error}`}
+                {reportResult.success ? '已发送（含 DEX + 储备数据）' : `失败: ${reportResult.error}`}
               </span>
             )}
           </div>

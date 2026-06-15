@@ -95,12 +95,17 @@ async def get_report_config(store: ConfigStore = Depends(get_config_store)):
     enabled = await store.get_setting("stablecoin.report_enabled")
     if enabled is None:
         enabled = True
-    return {"interval": interval, "enabled": enabled}
+    dex_interval = await store.get_setting("stablecoin.dex_liquidity_interval") or 300
+    reserves_interval = await store.get_setting("stablecoin.reserves_fetch_interval") or 21600
+    return {"interval": interval, "enabled": enabled,
+            "dex_liquidity_interval": dex_interval, "reserves_fetch_interval": reserves_interval}
 
 
 class ReportConfigUpdate(BaseModel):
     interval: int | None = None
     enabled: bool | None = None
+    dex_liquidity_interval: int | None = None
+    reserves_fetch_interval: int | None = None
 
 
 @router.put("/report-config")
@@ -109,11 +114,11 @@ async def update_report_config(data: ReportConfigUpdate, store: ConfigStore = De
         await store.set_setting("stablecoin.report_interval", data.interval)
     if data.enabled is not None:
         await store.set_setting("stablecoin.report_enabled", data.enabled)
-    interval = await store.get_setting("stablecoin.report_interval") or 3600
-    enabled = await store.get_setting("stablecoin.report_enabled")
-    if enabled is None:
-        enabled = True
-    return {"interval": interval, "enabled": enabled}
+    if data.dex_liquidity_interval is not None:
+        await store.set_setting("stablecoin.dex_liquidity_interval", data.dex_liquidity_interval)
+    if data.reserves_fetch_interval is not None:
+        await store.set_setting("stablecoin.reserves_fetch_interval", data.reserves_fetch_interval)
+    return await get_report_config(store)
 
 
 @router.post("/report/send")
