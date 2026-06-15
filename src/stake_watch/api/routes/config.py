@@ -107,10 +107,137 @@ async def test_telegram(store: ConfigStore = Depends(get_config_store)):
     try:
         from telegram import Bot
         bot = Bot(token=bot_token)
-        await bot.send_message(chat_id=chat_id, text="Stake Watch 测试消息 - 推送配置成功")
+        await bot.send_message(chat_id=chat_id, text=(
+            "✅ Stake Watch 连接测试成功\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "推送通道正常，下方将发送样例告警"
+        ))
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+SAMPLE_ALERTS = [
+    {
+        "key": "liquidation",
+        "label": "清算风险预警",
+        "text": (
+            "🔴 [CRITICAL] 清算风险预警\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "链: Base | 协议: Aave V3\n"
+            "仓位: USDC 借贷\n"
+            "Health Factor: 1.08 (阈值: 1.1)\n"
+            "LTV: 91.2%\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ 操作建议: 补充抵押品或减少借款"
+        ),
+    },
+    {
+        "key": "depeg",
+        "label": "稳定币脱锚",
+        "text": (
+            "🟡 [WARNING] 稳定币偏离预警\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "资产: USDT\n"
+            "当前价格: $0.994 (偏离 0.6%)\n"
+            "24h 供应变化: -3.2%\n"
+            "CEX 价差: 0.35%\n"
+            "综合风险评分: 42/100 (Caution)\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ 建议关注，暂停新增仓位"
+        ),
+    },
+    {
+        "key": "morpho_withdrawal",
+        "label": "Morpho 提现受阻",
+        "text": (
+            "🔴 [CRITICAL] Morpho 提现受阻\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "链: Base | Vault: Steakhouse USDC\n"
+            "无法提取 10% 仓位\n"
+            "流动性比率: 0.05\n"
+            "各市场利用率均 >95%\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ 优先退出，检查 withdrawal queue"
+        ),
+    },
+    {
+        "key": "morpho_governance",
+        "label": "Morpho 治理变更",
+        "text": (
+            "🔴 [CRITICAL] Morpho 关键治理变更\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "链: Base | Vault: Gauntlet USDC Prime\n"
+            "检测到: SetCurator\n"
+            "Curator 地址已变更\n"
+            "区块: #28,451,203\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ 立即核实新 Curator 身份"
+        ),
+    },
+    {
+        "key": "tvl_crash",
+        "label": "TVL 暴跌",
+        "text": (
+            "🔴 [CRITICAL] 协议 TVL 暴跌\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "链: Solana | 协议: Jupiter Lend\n"
+            "TVL 1 小时内下降 25%\n"
+            "$1.2B → $900M\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "⚠️ 检查是否有安全事件"
+        ),
+    },
+    {
+        "key": "apy_swing",
+        "label": "APY 大幅波动",
+        "text": (
+            "🔵 [INFO] APY 波动提醒\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "链: Base | 协议: Compound V3\n"
+            "USDC Supply APY: 3.2% → 8.7%\n"
+            "24h 变化: +172%\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "ℹ️ 可能存在收益机会"
+        ),
+    },
+    {
+        "key": "depeg_hard",
+        "label": "稳定币硬触发",
+        "text": (
+            "🔴🔴🔴 [HARD TRIGGER] USDT 价格低于 $0.98\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "当前价格: $0.971\n"
+            "偏离: 2.9%\n"
+            "多家交易所价差: 1.8%\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🚨 立即行动: 优先退出所有 USDT 相关仓位"
+        ),
+    },
+]
+
+
+@router.post("/telegram/test/{alert_key}")
+async def test_telegram_sample(alert_key: str, store: ConfigStore = Depends(get_config_store)):
+    bot_token = await store.get_setting("telegram.bot_token")
+    chat_id = await store.get_setting("telegram.chat_id")
+    if not bot_token or not chat_id:
+        return {"success": False, "error": "Telegram 未配置"}
+    sample = next((a for a in SAMPLE_ALERTS if a["key"] == alert_key), None)
+    if not sample:
+        return {"success": False, "error": f"未知告警类型: {alert_key}"}
+    try:
+        from telegram import Bot
+        bot = Bot(token=bot_token)
+        await bot.send_message(chat_id=chat_id, text=sample["text"])
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/telegram/samples")
+async def list_sample_alerts():
+    return [{"key": a["key"], "label": a["label"]} for a in SAMPLE_ALERTS]
 
 
 # --- Telegram Bind (listen for verification code) ---

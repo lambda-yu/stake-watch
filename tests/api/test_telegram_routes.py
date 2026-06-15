@@ -152,3 +152,34 @@ def test_extract_at_only():
 
 def test_extract_empty():
     assert _extract_code_from_text("", "123456") is False
+
+
+# --- Sample alerts tests ---
+
+@pytest.mark.asyncio
+async def test_list_samples(client):
+    resp = await client.get("/api/config/telegram/samples")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data) >= 7
+    keys = [s["key"] for s in data]
+    assert "liquidation" in keys
+    assert "depeg" in keys
+    assert "morpho_withdrawal" in keys
+    assert "tvl_crash" in keys
+
+
+@pytest.mark.asyncio
+async def test_send_sample_unconfigured(client):
+    resp = await client.post("/api/config/telegram/test/liquidation")
+    data = resp.json()
+    assert data["success"] is False
+
+
+@pytest.mark.asyncio
+async def test_send_sample_unknown_key(client):
+    await client.put("/api/config/telegram", json={"bot_token": "t", "chat_id": "c"})
+    resp = await client.post("/api/config/telegram/test/nonexistent")
+    data = resp.json()
+    assert data["success"] is False
+    assert "未知" in data["error"]

@@ -16,12 +16,18 @@ export function Notifications() {
   const [binding, setBinding] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Sample alerts
+  const [samples, setSamples] = useState<{ key: string; label: string }[]>([]);
+  const [sendingKey, setSendingKey] = useState<string | null>(null);
+  const [sampleResult, setSampleResult] = useState<{ key: string; success: boolean; error?: string } | null>(null);
+
   useEffect(() => {
     api.telegram.get().then(data => {
       setBotToken(data.bot_token || '');
       setChatId(data.chat_id || '');
       setConfigured(data.configured);
     }).catch(() => {});
+    api.telegram.samples().then(setSamples).catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -232,6 +238,77 @@ export function Notifications() {
               className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-1 rounded text-sm">
               重新绑定
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Sample Alert Test Push */}
+      <div className="mt-6 bg-gray-900 rounded-lg p-6">
+        <h2 className="text-lg font-semibold mb-2">测试推送</h2>
+        <p className="text-gray-500 text-sm mb-4">发送样例告警到 Telegram，预览实际推送效果</p>
+
+        {!configured && (
+          <p className="text-gray-600 text-sm">请先完成 Telegram 绑定</p>
+        )}
+
+        {configured && (
+          <div className="space-y-2">
+            <button
+              onClick={async () => {
+                setTesting(true); setSampleResult(null);
+                try {
+                  const r = await api.telegram.test();
+                  setSampleResult({ key: '_conn', ...r });
+                } catch (e: any) {
+                  setSampleResult({ key: '_conn', success: false, error: e.message });
+                } finally { setTesting(false); }
+              }}
+              disabled={testing}
+              className="w-full text-left bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded p-3 flex items-center gap-3 disabled:opacity-50"
+            >
+              <span className="text-green-400 text-lg">✅</span>
+              <div>
+                <div className="text-sm font-medium">连接测试</div>
+                <div className="text-xs text-gray-500">验证推送通道是否正常</div>
+              </div>
+              {sendingKey === '_conn' && <span className="ml-auto text-xs text-gray-500">发送中...</span>}
+            </button>
+
+            {samples.map(s => {
+              const icons: Record<string, string> = {
+                liquidation: '🔴', depeg: '🟡', morpho_withdrawal: '🔴',
+                morpho_governance: '🔴', tvl_crash: '🔴', apy_swing: '🔵', depeg_hard: '🚨',
+              };
+              return (
+                <button
+                  key={s.key}
+                  onClick={async () => {
+                    setSendingKey(s.key); setSampleResult(null);
+                    try {
+                      const r = await api.telegram.testSample(s.key);
+                      setSampleResult({ key: s.key, ...r });
+                    } catch (e: any) {
+                      setSampleResult({ key: s.key, success: false, error: e.message });
+                    } finally { setSendingKey(null); }
+                  }}
+                  disabled={sendingKey !== null}
+                  className="w-full text-left bg-gray-800 hover:bg-gray-750 border border-gray-700 rounded p-3 flex items-center gap-3 disabled:opacity-50"
+                >
+                  <span className="text-lg">{icons[s.key] || '📋'}</span>
+                  <div>
+                    <div className="text-sm font-medium">{s.label}</div>
+                    <div className="text-xs text-gray-500">发送样例 {s.label} 告警</div>
+                  </div>
+                  {sendingKey === s.key && <span className="ml-auto text-xs text-gray-500">发送中...</span>}
+                </button>
+              );
+            })}
+
+            {sampleResult && (
+              <div className={`rounded p-3 text-sm mt-2 ${sampleResult.success ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                {sampleResult.success ? '已发送，请查看 Telegram' : `发送失败: ${sampleResult.error}`}
+              </div>
+            )}
           </div>
         )}
       </div>

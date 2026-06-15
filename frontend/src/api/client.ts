@@ -42,6 +42,9 @@ export const api = {
     update: (data: { bot_token?: string; chat_id?: string }) =>
       request<any>('/config/telegram', { method: 'PUT', body: JSON.stringify(data) }),
     test: () => request<any>('/config/telegram/test', { method: 'POST' }),
+    testSample: (key: string) =>
+      request<any>(`/config/telegram/test/${key}`, { method: 'POST' }),
+    samples: () => request<any[]>('/config/telegram/samples'),
     bindStart: () => request<any>('/config/telegram/bind/start', { method: 'POST' }),
     bindStatus: () => request<any>('/config/telegram/bind/status'),
     bindCancel: () => request<any>('/config/telegram/bind/cancel', { method: 'POST' }),
