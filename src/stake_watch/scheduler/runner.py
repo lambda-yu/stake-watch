@@ -84,14 +84,14 @@ class ScheduledRunner:
             if tether:
                 await config_store.set_setting("reserves.usdt.total_reserves", float(tether["total_assets"]))
                 await config_store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
-                await config_store.set_setting("reserves.usdt.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+                await config_store.set_setting("reserves.usdt.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
             circle = await fetch_circle_supply()
             if circle:
                 supply = float(circle["total_supply"])
                 await config_store.set_setting("reserves.usdc.total_reserves", supply)
                 await config_store.set_setting("reserves.usdc.total_supply_live", supply)
-                await config_store.set_setting("reserves.usdc.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+                await config_store.set_setting("reserves.usdc.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
             logger.info(f"Reserves fetched: USDT={'OK' if tether else 'FAIL'} USDC={'OK' if circle else 'FAIL'}")
         except Exception as e:

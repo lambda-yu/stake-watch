@@ -33,6 +33,7 @@ async def get_reserves(storage: Storage = Depends(get_storage), store: ConfigSto
     results = []
     for token in ["USDC", "USDT"]:
         report_date = await store.get_setting(f"reserves.{token.lower()}.report_date")
+        last_fetched = await store.get_setting(f"reserves.{token.lower()}.last_fetched")
         total_reserves_raw = await store.get_setting(f"reserves.{token.lower()}.total_reserves")
         total_reserves = Decimal(str(total_reserves_raw)) if total_reserves_raw else None
 
@@ -46,7 +47,9 @@ async def get_reserves(storage: Storage = Depends(get_storage), store: ConfigSto
         composition = await store.get_setting(f"reserves.{token.lower()}.composition") or {}
 
         report = evaluate_reserve_risk(token, report_date, total_reserves, circulating, composition)
-        results.append(report.model_dump(mode="json"))
+        report_dict = report.model_dump(mode="json")
+        report_dict["last_fetched"] = last_fetched
+        results.append(report_dict)
 
     return results
 
@@ -78,13 +81,13 @@ async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
         await store.set_setting("reserves.usdt.total_liabilities", liabilities)
         await store.set_setting("reserves.usdt.equity", equity)
         await store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
-        await store.set_setting("reserves.usdt.report_date",
-            datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        await store.set_setting("reserves.usdt.last_fetched",
+            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
         await store.set_setting("reserves.usdt.composition", {
             "总资产": round(assets / 1e9, 1),
             "总负债": round(liabilities / 1e9, 1),
             "股东权益": round(equity / 1e9, 1),
-            "_来源": "Tether API (app.tether.to/transparency.json)",
+            "_来源": "Tether API (实时数据)",
         })
         top_chains = sorted(tether.get("chains", {}).items(), key=lambda x: x[1], reverse=True)[:5]
         results["USDT"] = {
@@ -100,8 +103,8 @@ async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
         supply = float(circle["total_supply"])
         await store.set_setting("reserves.usdc.total_supply_live", supply)
         await store.set_setting("reserves.usdc.total_reserves", supply)
-        await store.set_setting("reserves.usdc.report_date",
-            datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        await store.set_setting("reserves.usdc.last_fetched",
+            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
         top_chains = sorted(circle.get("chains", {}).items(), key=lambda x: x[1], reverse=True)[:5]
         await store.set_setting("reserves.usdc.composition", {
             "BlackRock USDXX (国债+回购)": 80,

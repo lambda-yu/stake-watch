@@ -274,21 +274,24 @@ export function Stablecoins() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">报告距今</span>
-                    <span className={`font-mono ${r.is_overdue ? 'text-red-400' : ''}`}>
-                      {r.days_since_report < 999 ? `${r.days_since_report} 天` : '-'}
-                      {r.is_overdue && r.days_since_report < 999 && ' (逾期)'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="text-gray-500">储备总额</span>
                     <span className="font-mono">
                       {Number(r.total_reserves) > 0 ? `$${(Number(r.total_reserves) / 1e9).toFixed(1)}B` : '-'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">报告周期</span>
-                    <span className="font-mono">{r.report_cadence_days} 天</span>
+                    <span className="text-gray-500">审计报告日期</span>
+                    <span className={`font-mono ${r.is_overdue ? 'text-red-400' : ''}`}>
+                      {r.report_date !== '未录入' ? r.report_date : '未录入'}
+                      {r.is_overdue && r.days_since_report < 999 && ` (${r.days_since_report}天, 逾期)`}
+                      {!r.is_overdue && r.days_since_report < 999 && ` (${r.days_since_report}天)`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">数据抓取</span>
+                    <span className="font-mono text-gray-400">
+                      {r.last_fetched || '-'}
+                    </span>
                   </div>
                 </div>
 
