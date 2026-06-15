@@ -13,6 +13,14 @@ async def get_stablecoin_snapshots(storage: Storage = Depends(get_storage)):
     return [s.model_dump(mode="json") for s in snapshots]
 
 
+@router.get("/dex-pools")
+async def get_dex_pools():
+    from stake_watch.collectors.stablecoin.dex_liquidity import DexLiquidityCollector
+    collector = DexLiquidityCollector()
+    pools = await collector.collect_pools()
+    return [p.model_dump(mode="json") for p in pools]
+
+
 @router.get("/report-config")
 async def get_report_config(store: ConfigStore = Depends(get_config_store)):
     interval = await store.get_setting("stablecoin.report_interval") or 3600

@@ -30,12 +30,14 @@ export function Stablecoins() {
   const [reportResult, setReportResult] = useState<{ success: boolean; error?: string } | null>(null);
 
   const [collecting, setCollecting] = useState(false);
+  const [dexPools, setDexPools] = useState<any[]>([]);
 
   useEffect(() => {
     api.stablecoins.snapshots().then(setSnapshots).catch(() => {});
     api.risk.get().then(setRiskConfig).catch(() => {});
     api.intervals.get().then(setIntervals).catch(() => {});
     api.stablecoins.reportConfig().then(setReportConfig).catch(() => {});
+    api.stablecoins.dexPools().then(setDexPools).catch(() => {});
   }, []);
 
   const updateRisk = async (key: string, value: number) => {
@@ -133,6 +135,71 @@ export function Stablecoins() {
             </div>
           );
         })}
+      </div>
+
+      {/* DEX Liquidity Pools */}
+      <div className="bg-gray-900 rounded-lg p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">DEX 流动性</h2>
+          <button onClick={() => api.stablecoins.dexPools().then(setDexPools).catch(() => {})}
+            className="text-xs text-gray-400 hover:text-gray-200">刷新</button>
+        </div>
+        {dexPools.length > 0 ? (
+          <div className="space-y-3">
+            {dexPools.map((p, i) => {
+              const slipColor = (v: number) => v > 1 ? 'text-red-400' : v > 0.5 ? 'text-yellow-400' : 'text-green-400';
+              return (
+                <div key={i} className="bg-gray-800 rounded p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <span className="font-medium text-sm">{p.pool_name}</span>
+                      <span className="text-xs text-gray-500 ml-2">{p.dex}</span>
+                    </div>
+                    <span className="text-xs text-gray-500 font-mono">
+                      TVL ${(Number(p.reserve_usd) / 1e6).toFixed(1)}M
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-500 block">价格比</span>
+                      <span className="font-mono">{p.price_ratio?.toFixed(5)}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">24h 交易量</span>
+                      <span className="font-mono">${(Number(p.volume_24h_usd) / 1e6).toFixed(1)}M</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">1h 交易量</span>
+                      <span className="font-mono">${(Number(p.volume_1h_usd) / 1e3).toFixed(0)}K</span>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-gray-700 grid grid-cols-3 gap-3 text-xs">
+                    <div>
+                      <span className="text-gray-500 block">$100K 滑点</span>
+                      <span className={`font-mono ${slipColor(p.estimated_slippage_100k)}`}>
+                        {p.estimated_slippage_100k?.toFixed(3)}%
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">$1M 滑点</span>
+                      <span className={`font-mono ${slipColor(p.estimated_slippage_1m)}`}>
+                        {p.estimated_slippage_1m?.toFixed(3)}%
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 block">$5M 滑点</span>
+                      <span className={`font-mono ${slipColor(p.estimated_slippage_5m)}`}>
+                        {p.estimated_slippage_5m?.toFixed(3)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-sm">加载中...</p>
+        )}
       </div>
 
       {/* Stablecoin-specific Thresholds */}
@@ -259,7 +326,7 @@ export function Stablecoins() {
         <div className="space-y-2 text-sm">
           {[
             { layer: 1, name: '价格脱锚检测', source: 'CoinGecko + DefiLlama', status: true },
-            { layer: 2, name: 'DEX 流动性 / 池倾斜', source: '链上 DEX', status: false },
+            { layer: 2, name: 'DEX 流动性 / 池倾斜', source: 'GeckoTerminal', status: true },
             { layer: 3, name: '链上供应量与赎回', source: 'DefiLlama', status: true },
             { layer: 4, name: '发行方储备监控', source: 'Circle / Tether', status: false },
             { layer: 5, name: '冻结与黑名单', source: '链上 eth_call', status: true },
