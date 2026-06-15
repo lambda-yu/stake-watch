@@ -31,8 +31,12 @@ def format_stablecoin_report(snapshots: list, tz_offset: int = 8,
         lines.append(f"  价格: ${s.price:.4f}  偏离: {s.deviation * 100:.3f}%")
 
         if hasattr(s, 'price_sources') and s.price_sources:
-            source_strs = [f"{ps.source}=${ps.price:.4f}" if hasattr(ps, 'source') else f"{ps.get('source','')}=${ps.get('price',0):.4f}" for ps in s.price_sources]
-            lines.append(f"  各源: {' | '.join(source_strs)}")
+            parts = []
+            for ps in s.price_sources:
+                name = ps.source if hasattr(ps, 'source') else ps.get('source', '?')
+                price = ps.price if hasattr(ps, 'price') else ps.get('price', 0)
+                parts.append(f"{name}=${price:.4f}")
+            lines.append(f"  各源: {' | '.join(parts)}")
 
         supply_b = float(s.total_supply) / 1e9
         lines.append(f"  总供应: ${supply_b:.1f}B")

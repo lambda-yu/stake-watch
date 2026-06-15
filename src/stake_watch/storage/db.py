@@ -173,6 +173,9 @@ class Storage:
     async def save_stablecoin_snapshot(self, snapshot):
         import json
         from stake_watch.storage.tables import StablecoinMetricsRow
+        sources_data = []
+        if hasattr(snapshot, 'price_sources') and snapshot.price_sources:
+            sources_data = [{"source": s.source, "price": s.price} if hasattr(s, 'source') else s for s in snapshot.price_sources]
         async with self._session_factory() as session:
             row = StablecoinMetricsRow(
                 token=snapshot.token, price=snapshot.price, deviation=snapshot.deviation,
@@ -183,7 +186,7 @@ class Storage:
                 risk_score=getattr(snapshot, "risk_score", 0.0),
                 hard_trigger=getattr(snapshot, "hard_trigger", None),
                 cex_spread_pct=getattr(snapshot, "cex_spread_pct", 0.0),
-                chain_data_json=json.dumps([]),
+                chain_data_json=json.dumps(sources_data),
                 updated_at=snapshot.updated_at)
             session.add(row)
             await session.commit()
@@ -192,9 +195,8 @@ class Storage:
         import json
         from sqlalchemy import func
         from stake_watch.storage.tables import StablecoinMetricsRow
-        from stake_watch.models.stablecoin import StablecoinRiskSnapshot
+        from stake_watch.models.stablecoin import StablecoinRiskSnapshot, SourcePrice
         async with self._session_factory() as session:
-            # Get latest snapshot per token
             subq = select(
                 StablecoinMetricsRow.token,
                 func.max(StablecoinMetricsRow.id).label("max_id")
@@ -203,13 +205,23 @@ class Storage:
                 select(StablecoinMetricsRow).join(
                     subq, StablecoinMetricsRow.id == subq.c.max_id))
             rows = result.scalars().all()
-            return [StablecoinRiskSnapshot(
-                token=r.token, price=r.price, deviation=r.deviation,
-                total_supply=r.total_supply,
-                supply_change_24h_pct=r.supply_change_24h_pct,
-                supply_change_7d_pct=r.supply_change_7d_pct,
-                risk_level=r.risk_level,
-                risk_score=r.risk_score or 0.0,
-                hard_trigger=r.hard_trigger,
-                cex_spread_pct=r.cex_spread_pct or 0.0,
-                updated_at=r.updated_at) for r in rows]
+            snapshots = []
+            for r in rows:
+                sources = []
+                try:
+                    raw = json.loads(r.chain_data_json) if r.chain_data_json else []
+                    sources = [SourcePrice(source=s["source"], price=s["price"]) for s in raw if "source" in s]
+                except Exception:
+                    pass
+                snapshots.append(StablecoinRiskSnapshot(
+                    token=r.token, price=r.price, deviation=r.deviation,
+                    total_supply=r.total_supply,
+                    supply_change_24h_pct=r.supply_change_24h_pct,
+                    supply_change_7d_pct=r.supply_change_7d_pct,
+                    risk_level=r.risk_level,
+                    risk_score=r.risk_score or 0.0,
+                    hard_trigger=r.hard_trigger,
+                    cex_spread_pct=r.cex_spread_pct or 0.0,
+                    price_sources=sources,
+                    updated_at=r.updated_at))
+            return snapshots
