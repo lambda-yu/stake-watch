@@ -1,0 +1,17 @@
+.venv/
+.git/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+*.db-wal
+.env
+.coverage
+.pytest_cache/
+htmlcov/
+frontend/node_modules/
+frontend/dist/
+docs/
+tests/
