@@ -1,2 +1,2 @@
-from stake_watch.scheduler.runner import CollectionRunner
-__all__ = ["CollectionRunner"]
+from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
+__all__ = ["CollectionRunner", "ScheduledRunner"]

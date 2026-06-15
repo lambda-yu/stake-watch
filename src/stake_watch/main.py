@@ -54,15 +54,18 @@ async def build_app(settings_path=None, protocols_path=None, local_settings_path
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
     runner, storage, settings = await build_app()
+    from stake_watch.scheduler.runner import ScheduledRunner
+    scheduled = ScheduledRunner(collection_runner=runner, position_interval=settings.intervals.positions,
+        stats_interval=settings.intervals.protocol_stats)
     logger.info(f"Stake Watch started with {len(runner.collectors)} collectors, {len(runner.wallets)} wallets")
+    await scheduled.trigger_now()
+    scheduled.start()
     try:
-        results = await runner.run_collection_cycle()
-        for r in results:
-            if r.protocol_stats:
-                logger.info(f"  {r.protocol_stats.protocol}: TVL=${r.protocol_stats.tvl_usd:,.0f}, {len(r.protocol_stats.pools)} pools")
-            for err in r.errors:
-                logger.warning(f"  Error: {err}")
-    finally:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        scheduled.stop()
         await storage.close()
 
 if __name__ == "__main__":

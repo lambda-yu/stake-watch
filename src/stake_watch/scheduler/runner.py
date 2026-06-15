@@ -34,3 +34,27 @@ class CollectionRunner:
                 tasks.append(self._run_single(collector, wallet))
         results = await asyncio.gather(*tasks, return_exceptions=False)
         return list(results)
+
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
+class ScheduledRunner:
+    def __init__(self, collection_runner: CollectionRunner, position_interval: int = 300, stats_interval: int = 900):
+        self.collection_runner = collection_runner
+        self.position_interval = position_interval
+        self.stats_interval = stats_interval
+        self._scheduler = AsyncIOScheduler()
+
+    async def trigger_now(self):
+        await self.collection_runner.run_collection_cycle()
+
+    def start(self):
+        self._scheduler.add_job(self.collection_runner.run_collection_cycle,
+            trigger=IntervalTrigger(seconds=self.position_interval),
+            id="positions", name="Collect positions", replace_existing=True)
+        self._scheduler.start()
+        logger.info(f"Scheduler started: positions every {self.position_interval}s")
+
+    def stop(self):
+        self._scheduler.shutdown(wait=False)
