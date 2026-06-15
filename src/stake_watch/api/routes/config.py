@@ -80,6 +80,21 @@ async def update_risk(data: RiskUpdate, store: ConfigStore = Depends(get_config_
     return settings.risk.model_dump()
 
 
+@router.get("/timezone")
+async def get_timezone(store: ConfigStore = Depends(get_config_store)):
+    offset = await store.get_setting("display.timezone_offset")
+    if offset is None:
+        offset = 8
+    return {"offset": offset}
+
+
+@router.put("/timezone")
+async def update_timezone(data: dict, store: ConfigStore = Depends(get_config_store)):
+    offset = data.get("offset", 8)
+    await store.set_setting("display.timezone_offset", offset)
+    return {"offset": offset}
+
+
 @router.get("/telegram")
 async def get_telegram(store: ConfigStore = Depends(get_config_store)):
     bot_token = await store.get_setting("telegram.bot_token") or ""

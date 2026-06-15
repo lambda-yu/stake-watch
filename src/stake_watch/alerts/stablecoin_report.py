@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from stake_watch.alerts.timezone import now_display
 from stake_watch.storage.db import Storage
 
 logger = logging.getLogger(__name__)
@@ -11,11 +12,11 @@ RISK_EMOJI = {"safe": "🟢", "watch": "🟡", "caution": "🟠", "danger": "�
 RISK_LABEL = {"safe": "安全", "watch": "关注", "caution": "注意", "danger": "危险", "critical": "严重"}
 
 
-def format_stablecoin_report(snapshots: list) -> str:
+def format_stablecoin_report(snapshots: list, tz_offset: int = 8) -> str:
     if not snapshots:
         return "📊 稳定币定时报告\n━━━━━━━━━━━━━━━━━━━━━━\n暂无数据"
 
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    now = now_display(tz_offset)
     lines = [f"📊 稳定币定时报告  {now}", "━━━━━━━━━━━━━━━━━━━━━━"]
 
     for s in snapshots:
@@ -55,11 +56,12 @@ async def send_stablecoin_report(storage: Storage):
     if not bot_token or not chat_id:
         return
 
+    tz_offset = await config_store.get_setting("display.timezone_offset") or 8
     snapshots = await storage.get_latest_stablecoin_snapshots()
     if not snapshots:
         return
 
-    text = format_stablecoin_report(snapshots)
+    text = format_stablecoin_report(snapshots, tz_offset=tz_offset)
 
     try:
         from telegram import Bot

@@ -23,12 +23,15 @@ export function Settings() {
   const [wallets, setWallets] = useState<any[]>([]);
   const [intervals, setIntervals] = useState<any>({});
   const [risk, setRisk] = useState<any>({});
+  const [tzOffset, setTzOffset] = useState(8);
 
   const reload = async () => {
     try {
       setWallets(await api.wallets.list());
       setIntervals(await api.intervals.get());
       setRisk(await api.risk.get());
+      const tz = await api.timezone.get();
+      setTzOffset(tz.offset);
     } catch {}
   };
   useEffect(() => { reload(); }, []);
@@ -40,6 +43,45 @@ export function Settings() {
 
   return (
     <div className="space-y-8 max-w-4xl">
+      <section>
+        <h2 className="text-xl font-semibold mb-3">时区设置</h2>
+        <p className="text-gray-600 text-xs mb-3">影响 Telegram 推送消息中的时间显示</p>
+        <div className="flex items-center gap-3">
+          <select value={tzOffset}
+            onChange={async e => {
+              const v = Number(e.target.value);
+              setTzOffset(v);
+              await api.timezone.update(v);
+            }}
+            className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+            <option value={-12}>UTC-12</option>
+            <option value={-11}>UTC-11</option>
+            <option value={-10}>UTC-10 (Hawaii)</option>
+            <option value={-9}>UTC-9 (Alaska)</option>
+            <option value={-8}>UTC-8 (太平洋)</option>
+            <option value={-7}>UTC-7 (山地)</option>
+            <option value={-6}>UTC-6 (中部)</option>
+            <option value={-5}>UTC-5 (东部)</option>
+            <option value={-4}>UTC-4</option>
+            <option value={-3}>UTC-3</option>
+            <option value={0}>UTC+0 (伦敦)</option>
+            <option value={1}>UTC+1 (中欧)</option>
+            <option value={2}>UTC+2 (东欧)</option>
+            <option value={3}>UTC+3 (莫斯科)</option>
+            <option value={4}>UTC+4 (迪拜)</option>
+            <option value={5}>UTC+5</option>
+            <option value={5.5}>UTC+5:30 (印度)</option>
+            <option value={6}>UTC+6</option>
+            <option value={7}>UTC+7 (曼谷)</option>
+            <option value={8}>UTC+8 (北京/新加坡)</option>
+            <option value={9}>UTC+9 (东京/首尔)</option>
+            <option value={10}>UTC+10 (悉尼)</option>
+            <option value={12}>UTC+12 (奥克兰)</option>
+          </select>
+          <span className="text-sm text-gray-500">当前: UTC{tzOffset >= 0 ? '+' : ''}{tzOffset}</span>
+        </div>
+      </section>
+
       <section>
         <h2 className="text-xl font-semibold mb-3">钱包管理</h2>
         <WalletForm onAdd={addWallet} />

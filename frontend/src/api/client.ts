@@ -37,6 +37,11 @@ export const api = {
     update: (data: any) =>
       request<any>('/config/risk', { method: 'PUT', body: JSON.stringify(data) }),
   },
+  timezone: {
+    get: () => request<any>('/config/timezone'),
+    update: (offset: number) =>
+      request<any>('/config/timezone', { method: 'PUT', body: JSON.stringify({ offset }) }),
+  },
   telegram: {
     get: () => request<any>('/config/telegram'),
     update: (data: { bot_token?: string; chat_id?: string }) =>
