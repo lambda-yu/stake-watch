@@ -29,12 +29,13 @@ class BaseCollector(ABC):
         errors: list[str] = []
         positions: list[Position] = []
         protocol_stats: ProtocolStats | None = None
-        try:
-            positions = await self.collect_positions(wallet)
-        except Exception as e:
-            msg = f"{self.protocol}: positions collection failed: {e}"
-            self.logger.error(msg)
-            errors.append(msg)
+        if wallet:
+            try:
+                positions = await self.collect_positions(wallet)
+            except Exception as e:
+                msg = f"{self.protocol}: positions collection failed: {e}"
+                self.logger.error(msg)
+                errors.append(msg)
         try:
             protocol_stats = await self.collect_protocol_stats()
         except Exception as e:

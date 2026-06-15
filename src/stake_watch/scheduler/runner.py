@@ -28,12 +28,12 @@ class CollectionRunner:
             return CollectResult(errors=[str(e)])
 
     async def run_collection_cycle(self) -> list[CollectResult]:
-        tasks = []
+        results = []
         for collector in self.collectors:
             for wallet in self.wallets:
-                tasks.append(self._run_single(collector, wallet))
-        results = await asyncio.gather(*tasks, return_exceptions=False)
-        return list(results)
+                result = await self._run_single(collector, wallet)
+                results.append(result)
+        return results
 
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler

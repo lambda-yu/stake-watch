@@ -1,5 +1,10 @@
 .PHONY: help dev dev-backend dev-frontend test test-cov lint build clean docker-up docker-down docker-build
 
+# Load nvm if available (for npm/node)
+NVM_DIR := $(HOME)/.nvm
+SHELL := /bin/bash
+export PATH := $(NVM_DIR)/versions/node/v22.22.0/bin:$(PATH)
+
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
