@@ -32,6 +32,8 @@ export function Stablecoins() {
   const [collecting, setCollecting] = useState(false);
   const [dexPools, setDexPools] = useState<any[]>([]);
   const [reserves, setReserves] = useState<any[]>([]);
+  const [fetchingReserves, setFetchingReserves] = useState(false);
+  const [reserveFetchResult, setReserveFetchResult] = useState<any>(null);
 
   useEffect(() => {
     api.stablecoins.snapshots().then(setSnapshots).catch(() => {});
@@ -210,17 +212,39 @@ export function Stablecoins() {
           <h2 className="text-lg font-semibold">发行方储备监控</h2>
           <button
             onClick={async () => {
-              await api.stablecoins.fetchReserves();
-              setReserves(await api.stablecoins.reserves());
+              setFetchingReserves(true); setReserveFetchResult(null);
+              try {
+                const r = await api.stablecoins.fetchReserves();
+                setReserveFetchResult(r);
+                setReserves(await api.stablecoins.reserves());
+              } catch (e: any) {
+                setReserveFetchResult({ success: false, error: e.message });
+              } finally { setFetchingReserves(false); }
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
-          >自动抓取</button>
+            disabled={fetchingReserves}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-3 py-1 rounded text-xs"
+          >{fetchingReserves ? '抓取中...' : '自动抓取'}</button>
         </div>
         <p className="text-gray-500 text-xs mb-4">
           自动从 Circle API 和 Tether API 获取最新数据。也可展开手动录入。
           <a href="https://www.circle.com/transparency" target="_blank" className="text-blue-400 ml-1">Circle</a>
           <a href="https://tether.to/en/transparency/" target="_blank" className="text-blue-400 ml-1">Tether</a>
         </p>
+        {reserveFetchResult && (
+          <div className={`rounded p-3 text-xs mb-4 ${reserveFetchResult.success ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+            {reserveFetchResult.success ? (
+              <div>
+                抓取成功
+                {reserveFetchResult.fetched?.USDT && (
+                  <span className="ml-2">USDT 总资产: ${(reserveFetchResult.fetched.USDT.total_assets / 1e9).toFixed(1)}B 覆盖率: {(reserveFetchResult.fetched.USDT.coverage_ratio * 100).toFixed(1)}%</span>
+                )}
+                {reserveFetchResult.fetched?.USDC && (
+                  <span className="ml-2">USDC 供应: ${(reserveFetchResult.fetched.USDC.total_supply / 1e9).toFixed(1)}B ({reserveFetchResult.fetched.USDC.chains}链)</span>
+                )}
+              </div>
+            ) : `抓取失败: ${reserveFetchResult.error}`}
+          </div>
+        )}
         <div className="space-y-4">
           {reserves.map(r => {
             const riskColors: Record<string, string> = {

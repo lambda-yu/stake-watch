@@ -11,35 +11,34 @@ logger = logging.getLogger(__name__)
 TETHER_URL = "https://app.tether.to/transparency.json"
 CIRCLE_SUPPLY_URL = "https://api.circle.com/v1/stablecoins"
 
+TETHER_CHAIN_MAP = {
+    "eth": "Ethereum", "trx": "Tron", "sol": "Solana", "ava": "Avalanche",
+    "bnb": "BSC", "algo": "Algorand", "eos": "EOS", "near": "Near",
+    "ton": "TON", "celo": "Celo", "aptos": "Aptos", "kaia": "Kaia",
+    "omni": "Omni", "liquid": "Liquid",
+}
+
 
 async def fetch_tether_reserves() -> dict | None:
-    """Fetch Tether transparency data: total assets, liabilities, equity."""
     try:
         async with httpx.AsyncClient(timeout=15, verify=False) as client:
             resp = await client.get(TETHER_URL)
             resp.raise_for_status()
-            data = resp.json()
+            raw = resp.json()
 
-        usdt_data = None
-        for entry in data if isinstance(data, list) else [data]:
-            if entry.get("iso") == "usdt" or entry.get("symbol") == "$":
-                usdt_data = entry
-                break
+        data = raw.get("data", raw)
+        usdt = data.get("usdt", data) if isinstance(data, dict) else data
 
-        if not usdt_data:
-            usdt_data = data[0] if isinstance(data, list) else data
-
-        total_assets = Decimal(str(usdt_data.get("total_assets", 0)))
-        total_liabilities = Decimal(str(usdt_data.get("total_liabilities", 0)))
-        equity = Decimal(str(usdt_data.get("shareholders_equity", 0)))
+        total_assets = Decimal(str(usdt.get("total_assets", 0) or 0))
+        total_liabilities = Decimal(str(usdt.get("total_liabilities", 0) or 0))
+        equity = Decimal(str(usdt.get("shareholders_equity", 0) or 0))
 
         chains = {}
-        for chain_data in usdt_data.get("tokens", []):
-            name = chain_data.get("name", "unknown")
-            authorized = Decimal(str(chain_data.get("total_authorized", 0)))
-            reserve = Decimal(str(chain_data.get("reserve_balance", 0)))
+        for suffix, name in TETHER_CHAIN_MAP.items():
+            authorized = Decimal(str(usdt.get(f"totaltokens_{suffix}", 0) or 0))
+            reserve = Decimal(str(usdt.get(f"reserve_balance_{suffix}", 0) or 0))
             issued = authorized - reserve
-            if issued > 0:
+            if issued > 1000:
                 chains[name] = float(issued)
 
         return {
@@ -57,14 +56,16 @@ async def fetch_tether_reserves() -> dict | None:
 
 
 async def fetch_circle_supply() -> dict | None:
-    """Fetch Circle USDC supply data per chain."""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.get(CIRCLE_SUPPLY_URL)
             resp.raise_for_status()
-            data = resp.json()
+            raw = resp.json()
 
-        stablecoins = data if isinstance(data, list) else [data]
+        stablecoins = raw.get("data", raw)
+        if not isinstance(stablecoins, list):
+            stablecoins = [stablecoins]
+
         usdc = None
         for s in stablecoins:
             if s.get("symbol") == "USDC":
