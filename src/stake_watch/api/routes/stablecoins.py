@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from stake_watch.api.deps import get_storage, get_config_store
@@ -53,6 +54,39 @@ async def update_reserves(token: str, data: dict, store: ConfigStore = Depends(g
     if "composition" in data:
         await store.set_setting(f"reserves.{token.lower()}.composition", data["composition"])
     return {"success": True}
+
+
+@router.post("/reserves/fetch")
+async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
+    """Auto-fetch reserve data from Circle API and Tether API."""
+    from stake_watch.collectors.stablecoin.reserves_fetcher import fetch_tether_reserves, fetch_circle_supply
+    results = {}
+
+    tether = await fetch_tether_reserves()
+    if tether:
+        await store.set_setting("reserves.usdt.total_reserves", float(tether["total_assets"]))
+        await store.set_setting("reserves.usdt.total_liabilities", float(tether["total_liabilities"]))
+        await store.set_setting("reserves.usdt.equity", float(tether["equity"]))
+        await store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
+        await store.set_setting("reserves.usdt.report_date",
+            datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        results["USDT"] = {
+            "total_assets": float(tether["total_assets"]),
+            "coverage_ratio": tether["coverage_ratio"],
+            "chains": len(tether.get("chains", {})),
+        }
+
+    circle = await fetch_circle_supply()
+    if circle:
+        await store.set_setting("reserves.usdc.total_supply_live", float(circle["total_supply"]))
+        await store.set_setting("reserves.usdc.report_date",
+            datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        results["USDC"] = {
+            "total_supply": float(circle["total_supply"]),
+            "chains": len(circle.get("chains", {})),
+        }
+
+    return {"success": True, "fetched": results}
 
 
 @router.get("/report-config")

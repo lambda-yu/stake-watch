@@ -63,6 +63,7 @@ export const api = {
     reserves: () => request<any[]>('/stablecoins/reserves'),
     updateReserves: (token: string, data: any) =>
       request<any>(`/stablecoins/reserves/${token}`, { method: 'PUT', body: JSON.stringify(data) }),
+    fetchReserves: () => request<any>('/stablecoins/reserves/fetch', { method: 'POST' }),
     reportConfig: () => request<any>('/stablecoins/report-config'),
     updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
       request<any>('/stablecoins/report-config', { method: 'PUT', body: JSON.stringify(data) }),

@@ -206,9 +206,18 @@ export function Stablecoins() {
 
       {/* Issuer Reserve Monitoring */}
       <div className="bg-gray-900 rounded-lg p-6 mb-6">
-        <h2 className="text-lg font-semibold mb-2">发行方储备监控</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">发行方储备监控</h2>
+          <button
+            onClick={async () => {
+              await api.stablecoins.fetchReserves();
+              setReserves(await api.stablecoins.reserves());
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs"
+          >自动抓取</button>
+        </div>
         <p className="text-gray-500 text-xs mb-4">
-          Circle 每月发布储备证明，Tether 每季度发布储备报告。请在报告发布后手动更新数据。
+          自动从 Circle API 和 Tether API 获取最新数据。也可展开手动录入。
           <a href="https://www.circle.com/transparency" target="_blank" className="text-blue-400 ml-1">Circle</a>
           <a href="https://tether.to/en/transparency/" target="_blank" className="text-blue-400 ml-1">Tether</a>
         </p>
@@ -430,7 +439,7 @@ export function Stablecoins() {
             { layer: 1, name: '价格脱锚检测', source: 'CoinGecko + DefiLlama', status: true },
             { layer: 2, name: 'DEX 流动性 / 池倾斜', source: 'GeckoTerminal', status: true },
             { layer: 3, name: '链上供应量与赎回', source: 'DefiLlama', status: true },
-            { layer: 4, name: '发行方储备监控', source: '手动录入 + 自动过期', status: true },
+            { layer: 4, name: '发行方储备监控', source: 'Circle API + Tether API', status: true },
             { layer: 5, name: '冻结与黑名单', source: '链上 eth_call', status: true },
             { layer: 6, name: '跨链版本校验', source: '白名单', status: true },
             { layer: 7, name: 'CEX 交易所价差', source: 'CoinGecko', status: true },
