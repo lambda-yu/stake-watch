@@ -54,5 +54,10 @@ export const api = {
   },
   stablecoins: {
     snapshots: () => request<any[]>('/stablecoins'),
+    reportConfig: () => request<any>('/stablecoins/report-config'),
+    updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
+      request<any>('/stablecoins/report-config', { method: 'PUT', body: JSON.stringify(data) }),
+    sendReport: () => request<any>('/stablecoins/report/send', { method: 'POST' }),
+    collect: () => request<any>('/stablecoins/collect', { method: 'POST' }),
   },
 };

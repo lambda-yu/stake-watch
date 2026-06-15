@@ -53,10 +53,16 @@ async def main():
     from stake_watch.api.app import create_app
     app = create_app(storage)
 
+    from stake_watch.storage.config_store import ConfigStore
+    config_store = ConfigStore(storage._session_factory)
+    report_interval = await config_store.get_setting("stablecoin.report_interval") or 3600
+
     scheduled = ScheduledRunner(
         collection_runner=runner,
         position_interval=settings.intervals.positions,
         stats_interval=settings.intervals.protocol_stats,
+        stablecoin_report_interval=report_interval,
+        storage=storage,
     )
 
     logger.info(

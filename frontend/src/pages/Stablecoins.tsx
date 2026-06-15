@@ -25,11 +25,17 @@ export function Stablecoins() {
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [riskConfig, setRiskConfig] = useState<any>({});
   const [intervals, setIntervals] = useState<any>({});
+  const [reportConfig, setReportConfig] = useState<{ interval: number; enabled: boolean }>({ interval: 3600, enabled: true });
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reportResult, setReportResult] = useState<{ success: boolean; error?: string } | null>(null);
+
+  const [collecting, setCollecting] = useState(false);
 
   useEffect(() => {
     api.stablecoins.snapshots().then(setSnapshots).catch(() => {});
     api.risk.get().then(setRiskConfig).catch(() => {});
     api.intervals.get().then(setIntervals).catch(() => {});
+    api.stablecoins.reportConfig().then(setReportConfig).catch(() => {});
   }, []);
 
   const updateRisk = async (key: string, value: number) => {
@@ -44,7 +50,22 @@ export function Stablecoins() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">稳定币监控</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">稳定币监控</h1>
+        <button
+          onClick={async () => {
+            setCollecting(true);
+            try {
+              await api.stablecoins.collect();
+              setSnapshots(await api.stablecoins.snapshots());
+            } catch {} finally { setCollecting(false); }
+          }}
+          disabled={collecting}
+          className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-4 py-2 rounded text-sm"
+        >
+          {collecting ? '采集中...' : '立即采集'}
+        </button>
+      </div>
 
       {/* Current Status */}
       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -154,6 +175,74 @@ export function Stablecoins() {
                 className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-24 font-mono" />
               <span className="text-xs text-gray-500">秒</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Report Push Config */}
+      <div className="bg-gray-900 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-2">定时报告推送</h2>
+        <p className="text-gray-500 text-sm mb-4">定时将 USDC/USDT 状态摘要推送到 Telegram</p>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={reportConfig.enabled}
+                onChange={async e => {
+                  const enabled = e.target.checked;
+                  const r = await api.stablecoins.updateReportConfig({ enabled });
+                  setReportConfig(r);
+                }}
+                className="w-4 h-4 rounded bg-gray-800 border-gray-600" />
+              <span className="text-sm">启用定时推送</span>
+            </label>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-400">推送间隔</label>
+            <select
+              value={reportConfig.interval}
+              onChange={async e => {
+                const interval = Number(e.target.value);
+                const r = await api.stablecoins.updateReportConfig({ interval });
+                setReportConfig(r);
+              }}
+              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+            >
+              <option value={1800}>30 分钟</option>
+              <option value={3600}>1 小时</option>
+              <option value={7200}>2 小时</option>
+              <option value={14400}>4 小时</option>
+              <option value={21600}>6 小时</option>
+              <option value={43200}>12 小时</option>
+              <option value={86400}>24 小时</option>
+            </select>
+            <span className="text-xs text-gray-600">
+              每 {reportConfig.interval >= 3600 ? `${reportConfig.interval / 3600} 小时` : `${reportConfig.interval / 60} 分钟`} 推送一次
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                setSendingReport(true); setReportResult(null);
+                try {
+                  const r = await api.stablecoins.sendReport();
+                  setReportResult(r);
+                } catch (e: any) {
+                  setReportResult({ success: false, error: e.message });
+                } finally { setSendingReport(false); }
+              }}
+              disabled={sendingReport}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-4 py-2 rounded text-sm"
+            >
+              {sendingReport ? '发送中...' : '立即发送报告'}
+            </button>
+            {reportResult && (
+              <span className={`text-sm ${reportResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {reportResult.success ? '已发送，请查看 Telegram' : `失败: ${reportResult.error}`}
+              </span>
+            )}
           </div>
         </div>
       </div>

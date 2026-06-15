@@ -40,19 +40,36 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 class ScheduledRunner:
-    def __init__(self, collection_runner: CollectionRunner, position_interval: int = 300, stats_interval: int = 900):
+    def __init__(self, collection_runner: CollectionRunner, position_interval: int = 300,
+                 stats_interval: int = 900, stablecoin_report_interval: int = 3600,
+                 storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
         self.stats_interval = stats_interval
+        self.stablecoin_report_interval = stablecoin_report_interval
+        self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
     async def trigger_now(self):
         await self.collection_runner.run_collection_cycle()
 
+    async def _send_stablecoin_report(self):
+        if not self.storage:
+            return
+        from stake_watch.alerts.stablecoin_report import send_stablecoin_report
+        await send_stablecoin_report(self.storage)
+
     def start(self):
         self._scheduler.add_job(self.collection_runner.run_collection_cycle,
             trigger=IntervalTrigger(seconds=self.position_interval),
             id="positions", name="Collect positions", replace_existing=True)
+
+        if self.stablecoin_report_interval > 0 and self.storage:
+            self._scheduler.add_job(self._send_stablecoin_report,
+                trigger=IntervalTrigger(seconds=self.stablecoin_report_interval),
+                id="stablecoin_report", name="Stablecoin report", replace_existing=True)
+            logger.info(f"Stablecoin report every {self.stablecoin_report_interval}s")
+
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")
 
