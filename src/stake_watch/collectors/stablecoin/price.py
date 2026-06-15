@@ -6,7 +6,7 @@ from statistics import median
 
 import httpx
 
-from stake_watch.models.stablecoin import StablecoinPrice
+from stake_watch.models.stablecoin import StablecoinPrice, SourcePrice
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +51,13 @@ class StablecoinPriceCollector:
             values = [p[1] for p in prices]
             median_price = median(values)
             sources_str = ",".join(s[0] for s in prices)
+            source_list = [SourcePrice(source=s[0], price=s[1]) for s in prices]
             results.append(StablecoinPrice(
                 token=token, price=median_price,
                 deviation=abs(median_price - 1.0),
                 price_24h_change=change_24h.get(token, 0.0),
                 source=f"{len(prices)}源({sources_str})",
+                sources=source_list,
                 updated_at=datetime.now(timezone.utc)))
 
         return results

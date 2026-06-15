@@ -92,9 +92,19 @@ export function Stablecoins() {
               {snap ? (
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span className="opacity-70">价格</span>
+                    <span className="opacity-70">价格 (中位数)</span>
                     <span className="font-mono">${snap.price?.toFixed(4)}</span>
                   </div>
+                  {snap.price_sources && snap.price_sources.length > 0 && (
+                    <div className="pl-2 space-y-0.5">
+                      {snap.price_sources.map((s: any, i: number) => (
+                        <div key={i} className="flex justify-between text-xs opacity-50">
+                          <span>{s.source}</span>
+                          <span className="font-mono">${s.price?.toFixed(5)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="opacity-70">偏离</span>
                     <span className="font-mono">{(snap.deviation * 100)?.toFixed(3)}%</span>

@@ -3,12 +3,17 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel
 
+class SourcePrice(BaseModel):
+    source: str
+    price: float
+
 class StablecoinPrice(BaseModel):
     token: str
     price: float
     deviation: float
     price_24h_change: float
     source: str
+    sources: list[SourcePrice] = []
     updated_at: datetime
 
 class ChainSupply(BaseModel):
@@ -34,7 +39,8 @@ class StablecoinRiskSnapshot(BaseModel):
     supply_change_24h_pct: float
     supply_change_7d_pct: float
     risk_level: str
-    risk_score: float = 0.0       # 0-100 composite score
-    hard_trigger: str | None = None  # if hard trigger fired
-    cex_spread_pct: float = 0.0   # CEX spread
+    risk_score: float = 0.0
+    hard_trigger: str | None = None
+    cex_spread_pct: float = 0.0
+    price_sources: list[SourcePrice] = []
     updated_at: datetime

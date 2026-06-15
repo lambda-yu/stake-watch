@@ -198,10 +198,14 @@ async def collect_now(storage: Storage = Depends(get_storage)):
                 supply_change_7d_pct=supply.net_change_7d_pct if supply else 0,
                 risk_level=score.level, risk_score=score.score,
                 hard_trigger=score.hard_trigger, cex_spread_pct=0,
+                price_sources=p.sources,
                 updated_at=datetime.now(timezone.utc),
             )
             await storage.save_stablecoin_snapshot(snap)
-            results.append({"token": p.token, "price": p.price, "risk_level": score.level})
+            results.append({
+                "token": p.token, "price": p.price, "risk_level": score.level,
+                "sources": [{"source": s.source, "price": s.price} for s in p.sources],
+            })
 
         return {"success": True, "collected": results}
     except Exception as e:
