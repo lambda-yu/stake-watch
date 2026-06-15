@@ -25,17 +25,17 @@ export function Protocols() {
   return (
     <div className="max-w-4xl">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Protocols</h1>
+        <h1 className="text-2xl font-bold">协议管理</h1>
         <button onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
-          {showForm ? 'Cancel' : 'Add Protocol'}
+          {showForm ? '取消' : '添加协议'}
         </button>
       </div>
 
       {showForm && (
         <form onSubmit={handleAdd} className="bg-gray-900 rounded-lg p-4 mb-4 grid grid-cols-2 gap-3">
           <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-            placeholder="Protocol name" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
+            placeholder="协议名称" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
           <select value={form.chain} onChange={e => setForm({...form, chain: e.target.value})}
             className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
             {CHAINS.map(c => <option key={c}>{c}</option>)}
@@ -43,9 +43,9 @@ export function Protocols() {
           <input value={form.defillama_slug} onChange={e => setForm({...form, defillama_slug: e.target.value})}
             placeholder="DefiLlama slug" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
           <input value={form.safety_score} onChange={e => setForm({...form, safety_score: e.target.value})}
-            placeholder="Safety score (0-10)" type="number" step="0.1"
+            placeholder="安全评分 (0-10)" type="number" step="0.1"
             className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
-          <button type="submit" className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">Save</button>
+          <button type="submit" className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">保存</button>
         </form>
       )}
 
@@ -56,7 +56,7 @@ export function Protocols() {
             onDelete={async (id) => { await api.protocols.delete(id); reload(); }}
           />
         ))}
-        {protocols.length === 0 && <p className="text-gray-500">No protocols configured. Add one above.</p>}
+        {protocols.length === 0 && <p className="text-gray-500">暂无协议配置，请点击上方"添加协议"</p>}
       </div>
     </div>
   );

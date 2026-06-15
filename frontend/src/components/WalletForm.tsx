@@ -23,10 +23,10 @@ export function WalletForm({ onAdd }: Props) {
         {CHAINS.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
       <input value={address} onChange={e => setAddress(e.target.value)}
-        placeholder="Wallet address" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm flex-1" />
+        placeholder="钱包地址" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm flex-1" />
       <input value={label} onChange={e => setLabel(e.target.value)}
-        placeholder="Label (optional)" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-40" />
-      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">Add</button>
+        placeholder="备注（可选）" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm w-40" />
+      <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">添加</button>
     </form>
   );
 }

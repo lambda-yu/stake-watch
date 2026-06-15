@@ -10,13 +10,13 @@ function Layout({ children }: { children: React.ReactNode }) {
         <span className="text-lg font-bold text-white">Stake Watch</span>
         <NavLink to="/" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
-        }>Dashboard</NavLink>
+        }>仪表盘</NavLink>
         <NavLink to="/settings" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
-        }>Settings</NavLink>
+        }>设置</NavLink>
         <NavLink to="/protocols" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
-        }>Protocols</NavLink>
+        }>协议管理</NavLink>
       </nav>
       <main className="p-6">{children}</main>
     </div>

@@ -23,9 +23,9 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
         <div className="flex gap-2">
           <button onClick={() => onToggle(p.id)}
             className={`text-xs px-3 py-1 rounded ${p.enabled ? 'bg-green-800 text-green-200' : 'bg-gray-700 text-gray-400'}`}>
-            {p.enabled ? 'Enabled' : 'Disabled'}
+            {p.enabled ? '已启用' : '已禁用'}
           </button>
-          <button onClick={() => onDelete(p.id)} className="text-xs text-red-400 hover:text-red-300">Delete</button>
+          <button onClick={() => onDelete(p.id)} className="text-xs text-red-400 hover:text-red-300">删除</button>
         </div>
       </div>
     </div>
