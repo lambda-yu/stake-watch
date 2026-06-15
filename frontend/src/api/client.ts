@@ -1,0 +1,43 @@
+const BASE = '/api';
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const resp = await fetch(`${BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  });
+  if (resp.status === 204) return undefined as T;
+  if (!resp.ok) throw new Error(`${resp.status}: ${await resp.text()}`);
+  return resp.json();
+}
+
+export const api = {
+  wallets: {
+    list: () => request<any[]>('/config/wallets'),
+    add: (data: { chain: string; address: string; label?: string }) =>
+      request<any>('/config/wallets', { method: 'POST', body: JSON.stringify(data) }),
+    delete: (id: number) =>
+      request<void>(`/config/wallets/${id}`, { method: 'DELETE' }),
+  },
+  protocols: {
+    list: () => request<any[]>('/protocols'),
+    add: (data: any) =>
+      request<any>('/protocols', { method: 'POST', body: JSON.stringify(data) }),
+    toggle: (id: number) =>
+      request<any>(`/protocols/${id}/toggle`, { method: 'PATCH' }),
+    delete: (id: number) =>
+      request<void>(`/protocols/${id}`, { method: 'DELETE' }),
+  },
+  intervals: {
+    get: () => request<any>('/config/intervals'),
+    update: (data: any) =>
+      request<any>('/config/intervals', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  risk: {
+    get: () => request<any>('/config/risk'),
+    update: (data: any) =>
+      request<any>('/config/risk', { method: 'PUT', body: JSON.stringify(data) }),
+  },
+  status: {
+    get: () => request<any>('/status'),
+  },
+};
