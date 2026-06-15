@@ -100,3 +100,18 @@ class AlertRow(Base):
     details_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     dedup_key: Mapped[str] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class StablecoinMetricsRow(Base):
+    __tablename__ = "stablecoin_metrics"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(10))
+    price: Mapped[float] = mapped_column(Float)
+    deviation: Mapped[float] = mapped_column(Float)
+    total_supply: Mapped[Decimal] = mapped_column(Numeric(38, 2))
+    supply_change_24h_pct: Mapped[float] = mapped_column(Float)
+    supply_change_7d_pct: Mapped[float] = mapped_column(Float)
+    risk_level: Mapped[str] = mapped_column(String(20))
+    chain_data_json: Mapped[str] = mapped_column(Text, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (Index("ix_stablecoin_token", "token"),)

@@ -169,3 +169,41 @@ class Storage:
                 )
                 for r in rows
             ]
+
+    async def save_stablecoin_snapshot(self, snapshot):
+        import json
+        from stake_watch.storage.tables import StablecoinMetricsRow
+        async with self._session_factory() as session:
+            row = StablecoinMetricsRow(
+                token=snapshot.token, price=snapshot.price, deviation=snapshot.deviation,
+                total_supply=snapshot.total_supply,
+                supply_change_24h_pct=snapshot.supply_change_24h_pct,
+                supply_change_7d_pct=snapshot.supply_change_7d_pct,
+                risk_level=snapshot.risk_level,
+                chain_data_json=json.dumps([]),
+                updated_at=snapshot.updated_at)
+            session.add(row)
+            await session.commit()
+
+    async def get_latest_stablecoin_snapshots(self) -> list:
+        import json
+        from sqlalchemy import func
+        from stake_watch.storage.tables import StablecoinMetricsRow
+        from stake_watch.models.stablecoin import StablecoinRiskSnapshot
+        async with self._session_factory() as session:
+            # Get latest snapshot per token
+            subq = select(
+                StablecoinMetricsRow.token,
+                func.max(StablecoinMetricsRow.id).label("max_id")
+            ).group_by(StablecoinMetricsRow.token).subquery()
+            result = await session.execute(
+                select(StablecoinMetricsRow).join(
+                    subq, StablecoinMetricsRow.id == subq.c.max_id))
+            rows = result.scalars().all()
+            return [StablecoinRiskSnapshot(
+                token=r.token, price=r.price, deviation=r.deviation,
+                total_supply=r.total_supply,
+                supply_change_24h_pct=r.supply_change_24h_pct,
+                supply_change_7d_pct=r.supply_change_7d_pct,
+                risk_level=r.risk_level,
+                updated_at=r.updated_at) for r in rows]
