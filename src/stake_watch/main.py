@@ -2,11 +2,13 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+import uvicorn
+from stake_watch.api.app import create_app
 from stake_watch.collectors.base import BaseCollector
 from stake_watch.collectors.defillama import DefiLlamaCollector
 from stake_watch.config import AppSettings, ProtocolEntry, load_protocols, load_settings
 from stake_watch.models.common import Chain
-from stake_watch.scheduler.runner import CollectionRunner
+from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
 from stake_watch.storage.db import Storage
 
 logger = logging.getLogger(__name__)
@@ -52,19 +54,33 @@ async def build_app(settings_path=None, protocols_path=None, local_settings_path
     return runner, storage, settings
 
 async def main():
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    )
     runner, storage, settings = await build_app()
-    from stake_watch.scheduler.runner import ScheduledRunner
-    scheduled = ScheduledRunner(collection_runner=runner, position_interval=settings.intervals.positions,
-        stats_interval=settings.intervals.protocol_stats)
-    logger.info(f"Stake Watch started with {len(runner.collectors)} collectors, {len(runner.wallets)} wallets")
+
+    app = create_app(storage)
+
+    scheduled = ScheduledRunner(
+        collection_runner=runner,
+        position_interval=settings.intervals.positions,
+        stats_interval=settings.intervals.protocol_stats,
+    )
+
+    logger.info(
+        f"Stake Watch started with {len(runner.collectors)} collectors, "
+        f"{len(runner.wallets)} wallets"
+    )
+
     await scheduled.trigger_now()
     scheduled.start()
+
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
+    server = uvicorn.Server(config)
     try:
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("Shutting down...")
+        await server.serve()
+    finally:
         scheduled.stop()
         await storage.close()
 
