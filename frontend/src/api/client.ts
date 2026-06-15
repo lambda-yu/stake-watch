@@ -37,6 +37,12 @@ export const api = {
     update: (data: any) =>
       request<any>('/config/risk', { method: 'PUT', body: JSON.stringify(data) }),
   },
+  telegram: {
+    get: () => request<any>('/config/telegram'),
+    update: (data: { bot_token?: string; chat_id?: string }) =>
+      request<any>('/config/telegram', { method: 'PUT', body: JSON.stringify(data) }),
+    test: () => request<any>('/config/telegram/test', { method: 'POST' }),
+  },
   status: {
     get: () => request<any>('/status'),
   },

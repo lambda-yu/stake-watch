@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { Settings } from './pages/Settings';
 import { Protocols } from './pages/Protocols';
+import { Notifications } from './pages/Notifications';
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -17,6 +18,9 @@ function Layout({ children }: { children: React.ReactNode }) {
         <NavLink to="/protocols" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
         }>协议管理</NavLink>
+        <NavLink to="/notifications" className={({ isActive }) =>
+          isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
+        }>推送配置</NavLink>
       </nav>
       <main className="p-6">{children}</main>
     </div>
@@ -31,6 +35,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/protocols" element={<Protocols />} />
+          <Route path="/notifications" element={<Notifications />} />
         </Routes>
       </Layout>
     </BrowserRouter>
