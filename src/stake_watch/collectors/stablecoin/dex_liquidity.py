@@ -30,7 +30,36 @@ MONITORED_POOLS = [
         "pair": "DAI/USDC/USDT",
         "dex": "Curve",
     },
+    {
+        "name": "Uniswap V3 USD0/USDC",
+        "network": "eth",
+        "address": "0x4e665157291dbcb25152ebb01061e4012f58add2",
+        "pair": "USD0/USDC",
+        "dex": "Uniswap V3",
+    },
+    {
+        "name": "Curve USD0/USDC",
+        "network": "eth",
+        "address": "0x14100f81e33c33ecc7cdac70181fb45b6e78569f",
+        "pair": "USD0/USDC",
+        "dex": "Curve",
+    },
+    {
+        "name": "Curve USD1/crv2pool",
+        "network": "eth",
+        "address": "0xc09e82f81cb811db0922dd48206fc2e212322caf",
+        "pair": "USD1/USDC+USDT",
+        "dex": "Curve",
+    },
+    {
+        "name": "Uniswap V3 USD1/USDT",
+        "network": "eth",
+        "address": "0x185a1ff695d30a22c19f44c6b41e2d6d1c8c1f11",
+        "pair": "USD1/USDT",
+        "dex": "Uniswap V3",
+    },
 ]
+
 
 
 class DexPoolSnapshot(BaseModel):
