@@ -21,6 +21,40 @@ async def get_dex_pools():
     return [p.model_dump(mode="json") for p in pools]
 
 
+@router.get("/reserves")
+async def get_reserves(storage: Storage = Depends(get_storage), store: ConfigStore = Depends(get_config_store)):
+    from stake_watch.collectors.stablecoin.reserves import evaluate_reserve_risk
+    from decimal import Decimal
+
+    snapshots = await storage.get_latest_stablecoin_snapshots()
+    supply_map = {s.token: s.total_supply for s in snapshots}
+
+    results = []
+    for token in ["USDC", "USDT"]:
+        report_date = await store.get_setting(f"reserves.{token.lower()}.report_date")
+        total_reserves_raw = await store.get_setting(f"reserves.{token.lower()}.total_reserves")
+        total_reserves = Decimal(str(total_reserves_raw)) if total_reserves_raw else None
+        composition = await store.get_setting(f"reserves.{token.lower()}.composition") or {}
+        circulating = supply_map.get(token, Decimal("0"))
+
+        report = evaluate_reserve_risk(token, report_date, total_reserves, circulating, composition)
+        results.append(report.model_dump(mode="json"))
+
+    return results
+
+
+@router.put("/reserves/{token}")
+async def update_reserves(token: str, data: dict, store: ConfigStore = Depends(get_config_store)):
+    token = token.upper()
+    if "report_date" in data:
+        await store.set_setting(f"reserves.{token.lower()}.report_date", data["report_date"])
+    if "total_reserves" in data:
+        await store.set_setting(f"reserves.{token.lower()}.total_reserves", data["total_reserves"])
+    if "composition" in data:
+        await store.set_setting(f"reserves.{token.lower()}.composition", data["composition"])
+    return {"success": True}
+
+
 @router.get("/report-config")
 async def get_report_config(store: ConfigStore = Depends(get_config_store)):
     interval = await store.get_setting("stablecoin.report_interval") or 3600

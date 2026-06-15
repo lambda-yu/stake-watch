@@ -60,6 +60,9 @@ export const api = {
   stablecoins: {
     snapshots: () => request<any[]>('/stablecoins'),
     dexPools: () => request<any[]>('/stablecoins/dex-pools'),
+    reserves: () => request<any[]>('/stablecoins/reserves'),
+    updateReserves: (token: string, data: any) =>
+      request<any>(`/stablecoins/reserves/${token}`, { method: 'PUT', body: JSON.stringify(data) }),
     reportConfig: () => request<any>('/stablecoins/report-config'),
     updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
       request<any>('/stablecoins/report-config', { method: 'PUT', body: JSON.stringify(data) }),

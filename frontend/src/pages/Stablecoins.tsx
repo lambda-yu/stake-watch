@@ -31,6 +31,7 @@ export function Stablecoins() {
 
   const [collecting, setCollecting] = useState(false);
   const [dexPools, setDexPools] = useState<any[]>([]);
+  const [reserves, setReserves] = useState<any[]>([]);
 
   useEffect(() => {
     api.stablecoins.snapshots().then(setSnapshots).catch(() => {});
@@ -38,6 +39,7 @@ export function Stablecoins() {
     api.intervals.get().then(setIntervals).catch(() => {});
     api.stablecoins.reportConfig().then(setReportConfig).catch(() => {});
     api.stablecoins.dexPools().then(setDexPools).catch(() => {});
+    api.stablecoins.reserves().then(setReserves).catch(() => {});
   }, []);
 
   const updateRisk = async (key: string, value: number) => {
@@ -202,6 +204,106 @@ export function Stablecoins() {
         )}
       </div>
 
+      {/* Issuer Reserve Monitoring */}
+      <div className="bg-gray-900 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-2">发行方储备监控</h2>
+        <p className="text-gray-500 text-xs mb-4">
+          Circle 每月发布储备证明，Tether 每季度发布储备报告。请在报告发布后手动更新数据。
+          <a href="https://www.circle.com/transparency" target="_blank" className="text-blue-400 ml-1">Circle</a>
+          <a href="https://tether.to/en/transparency/" target="_blank" className="text-blue-400 ml-1">Tether</a>
+        </p>
+        <div className="space-y-4">
+          {reserves.map(r => {
+            const riskColors: Record<string, string> = {
+              safe: 'border-green-800', watch: 'border-yellow-800', warning: 'border-orange-800',
+              danger: 'border-red-800', critical: 'border-red-600', unknown: 'border-gray-700',
+            };
+            const riskLabels: Record<string, string> = {
+              safe: '安全', watch: '关注', warning: '预警', danger: '危险', critical: '严重', unknown: '未录入',
+            };
+            return (
+              <div key={r.token} className={`bg-gray-800 rounded-lg p-4 border ${riskColors[r.risk_level] || 'border-gray-700'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="font-semibold">{r.token}</span>
+                    <span className="text-xs text-gray-500 ml-2">{r.issuer}</span>
+                  </div>
+                  <span className={`text-xs px-2 py-0.5 rounded ${r.risk_level === 'safe' ? 'bg-green-900 text-green-300' : r.risk_level === 'unknown' ? 'bg-gray-700 text-gray-400' : 'bg-red-900 text-red-300'}`}>
+                    {riskLabels[r.risk_level]}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">储备覆盖率</span>
+                    <span className={`font-mono ${r.coverage_ratio < 1 ? 'text-red-400' : 'text-green-400'}`}>
+                      {r.coverage_ratio > 0 ? `${(r.coverage_ratio * 100).toFixed(1)}%` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">报告距今</span>
+                    <span className={`font-mono ${r.is_overdue ? 'text-red-400' : ''}`}>
+                      {r.days_since_report < 999 ? `${r.days_since_report} 天` : '-'}
+                      {r.is_overdue && r.days_since_report < 999 && ' (逾期)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">储备总额</span>
+                    <span className="font-mono">
+                      {Number(r.total_reserves) > 0 ? `$${(Number(r.total_reserves) / 1e9).toFixed(1)}B` : '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">报告周期</span>
+                    <span className="font-mono">{r.report_cadence_days} 天</span>
+                  </div>
+                </div>
+
+                {Object.keys(r.composition || {}).length > 0 && (
+                  <div className="mb-3">
+                    <span className="text-xs text-gray-500 block mb-1">储备构成</span>
+                    <div className="flex gap-1">
+                      {Object.entries(r.composition).map(([k, v]) => (
+                        <div key={k} className="bg-gray-700 rounded px-2 py-0.5 text-xs">
+                          {k} {v as number}%
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <details className="mt-2">
+                  <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-200">更新储备数据</summary>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 block">报告日期</label>
+                      <input type="date" defaultValue={r.report_date !== '未录入' ? r.report_date : ''}
+                        onChange={async e => {
+                          await api.stablecoins.updateReserves(r.token, { report_date: e.target.value });
+                          setReserves(await api.stablecoins.reserves());
+                        }}
+                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-full" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block">储备总额 (USD)</label>
+                      <input type="number" defaultValue={Number(r.total_reserves) || ''}
+                        placeholder="例: 76000000000"
+                        onBlur={async e => {
+                          if (e.target.value) {
+                            await api.stablecoins.updateReserves(r.token, { total_reserves: Number(e.target.value) });
+                            setReserves(await api.stablecoins.reserves());
+                          }
+                        }}
+                        className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs w-full font-mono" />
+                    </div>
+                  </div>
+                </details>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Stablecoin-specific Thresholds */}
       <div className="bg-gray-900 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">脱锚告警阈值</h2>
@@ -328,7 +430,7 @@ export function Stablecoins() {
             { layer: 1, name: '价格脱锚检测', source: 'CoinGecko + DefiLlama', status: true },
             { layer: 2, name: 'DEX 流动性 / 池倾斜', source: 'GeckoTerminal', status: true },
             { layer: 3, name: '链上供应量与赎回', source: 'DefiLlama', status: true },
-            { layer: 4, name: '发行方储备监控', source: 'Circle / Tether', status: false },
+            { layer: 4, name: '发行方储备监控', source: '手动录入 + 自动过期', status: true },
             { layer: 5, name: '冻结与黑名单', source: '链上 eth_call', status: true },
             { layer: 6, name: '跨链版本校验', source: '白名单', status: true },
             { layer: 7, name: 'CEX 交易所价差', source: 'CoinGecko', status: true },
