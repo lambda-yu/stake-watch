@@ -40,31 +40,40 @@ Stake Watch is a personal tool for monitoring staking/lending yields and risks a
 | Database | SQLite + SQLAlchemy | Lightweight for personal use |
 | Scheduler | APScheduler | Mature Python scheduling |
 | Telegram | python-telegram-bot | Official recommended library |
-| Config | pydantic-settings + YAML | Type-safe configuration |
+| API | FastAPI + uvicorn | Config management + data API |
+| Frontend | React + TypeScript + Vite | SPA for config and monitoring |
+| Frontend UI | Tailwind CSS + shadcn/ui | Rapid, polished UI components |
+| Config storage | DB-stored, managed via REST API | All config from frontend, no YAML editing |
 | Auxiliary APIs | DefiLlama, CoinGecko | Free, no API key required |
-| Web panel (P4) | FastAPI + Streamlit | Rapid prototyping |
-| Testing | pytest + pytest-asyncio | Standard choice |
+| Testing | pytest + pytest-asyncio + Vitest | Backend + frontend tests |
 
 ### Project Structure
 
 ```
 stake-watch/
 ├── pyproject.toml
+├── .env                            # Bootstrap only: DB path, server port
 ├── config/
-│   ├── settings.yaml           # Global config (RPC endpoints, DB, intervals)
-│   ├── protocols.yaml          # Protocol registry (chain + protocol + params)
-│   └── stablecoins.yaml        # Stablecoin address whitelist per chain
+│   └── seed.yaml                   # First-time DB initialization seed data
 ├── src/
 │   └── stake_watch/
 │       ├── __init__.py
-│       ├── main.py             # Entry point: scheduler startup
+│       ├── main.py                 # Entry point: FastAPI + scheduler startup
 │       ├── models/
-│       │   ├── position.py     # Position: chain, protocol, asset, amount, APY, LTV
-│       │   ├── protocol.py     # Protocol metadata: TVL, rates, status
-│       │   ├── alert.py        # Alert event model
-│       │   └── stablecoin.py   # Stablecoin metrics and risk score
+│       │   ├── position.py         # Position: chain, protocol, asset, amount, APY, LTV
+│       │   ├── protocol.py         # Protocol metadata: TVL, rates, status
+│       │   ├── alert.py            # Alert event model
+│       │   └── stablecoin.py       # Stablecoin metrics and risk score
+│       ├── api/
+│       │   ├── __init__.py
+│       │   ├── app.py              # FastAPI application factory
+│       │   ├── deps.py             # Dependency injection (Storage, ConfigStore)
+│       │   └── routes/
+│       │       ├── config.py       # Wallets, RPC, intervals, risk thresholds CRUD
+│       │       ├── protocols.py    # Protocol CRUD + enable/disable
+│       │       └── status.py       # System health, collector status
 │       ├── collectors/
-│       │   ├── base.py         # BaseCollector abstract base class
+│       │   ├── base.py             # BaseCollector abstract base class
 │       │   ├── solana/
 │       │   │   ├── jupiter_lend.py
 │       │   │   ├── kamino.py
@@ -117,10 +126,31 @@ stake-watch/
 │       │   ├── base.py           # BaseNotifier ABC
 │       │   └── telegram.py       # Telegram Bot notifier
 │       ├── storage/
-│       │   └── db.py             # SQLite + SQLAlchemy
-│       ├── scheduler/
-│       │   └── runner.py         # APScheduler driver
-│       └── api/                  # Web API (P4)
+│       │   ├── db.py             # SQLite + SQLAlchemy engine
+│       │   ├── tables.py         # All table definitions (data + config)
+│       │   └── config_store.py   # Config-specific CRUD (wallets, RPC, protocols, settings)
+│       └── scheduler/
+│           └── runner.py         # APScheduler driver
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── index.html
+│   └── src/
+│       ├── App.tsx
+│       ├── main.tsx
+│       ├── api/                   # API client
+│       │   └── client.ts
+│       ├── pages/
+│       │   ├── Dashboard.tsx      # Overview: protocol status, collector health
+│       │   ├── Settings.tsx       # Wallets, RPC, intervals, thresholds, Telegram
+│       │   ├── Protocols.tsx      # Protocol list + add/edit/toggle
+│       │   └── Alerts.tsx         # Alert history (P2)
+│       └── components/
+│           ├── Layout.tsx
+│           ├── WalletForm.tsx
+│           ├── ProtocolCard.tsx
+│           └── ThresholdEditor.tsx
 ├── tests/
 ├── docs/
 └── scripts/
@@ -837,13 +867,14 @@ Only Telegram in V1. BaseNotifier allows future Discord/email additions.
 
 | Phase | Scope | Depends on |
 |---|---|---|
-| **P1** | Project skeleton + BaseCollector + first protocol collectors (Morpho Base, Aave V3 Base, Jupiter Lend, DefiLlama aggregation) + SQLite storage + scheduler | — |
-| **P1-morpho** | Morpho 10-layer deep monitoring MVP (8 core metrics) | P1 |
-| **P2** | Risk rule engine + Telegram Bot + all alert types + Morpho-specific rules + deduplication/cooldown | P1 |
+| **P1a** | Project skeleton + data models + SQLite storage + BaseCollector + DefiLlama collector + scheduler | — |
+| **P1b** | FastAPI config API + React frontend skeleton + config management pages (Settings, Protocols) | P1a |
+| **P1-morpho** | Morpho 10-layer deep monitoring MVP (8 core metrics) | P1a |
+| **P2** | Risk rule engine + Telegram Bot + all alert types + Morpho-specific rules + deduplication/cooldown | P1a |
 | **P2-protocols** | Additional protocol collectors: Sky sUSDS, Compound V3, Fluid, Kamino + per-protocol risk rules | P2 |
-| **P3a** | Stablecoin minimum viable monitoring (10 core metrics) | P1 |
+| **P3a** | Stablecoin minimum viable monitoring (10 core metrics) | P1a |
 | **P3b** | Full 8-layer stablecoin module + composite scoring model | P3a |
-| **P4** | FastAPI API layer + Streamlit visualization panel | P1 |
+| **P4** | Data visualization dashboards (protocol overview, yield comparison, risk heatmaps) | P1b |
 
 ### P3a Minimum Viable Stablecoin Monitoring (10 items)
 
@@ -860,46 +891,149 @@ Only Telegram in V1. BaseNotifier allows future Discord/email additions.
 
 ---
 
-## 9. Configuration
+## 9. Configuration (DB-Stored, Frontend-Managed)
 
-### settings.yaml
+All user-facing configuration is stored in SQLite and managed through the React frontend via FastAPI REST API. No YAML file editing for runtime settings.
+
+### Config Storage Architecture
+
+```
+First startup:
+  config/seed.yaml exists + DB config tables empty
+    → import seed data into DB
+    → seed.yaml stays as reference, never read again at runtime
+
+Normal startup:
+  Load all config from DB → build AppSettings → pass to collectors/scheduler
+
+Runtime config change (via frontend):
+  User edits in React UI → PUT /api/config/... → update DB
+    → scheduler picks up changes on next collection cycle (hot-reload)
+```
+
+### Bootstrap Config (.env only)
+
+Only infrastructure-level config lives in `.env` (not user-facing):
+
+```env
+# .env — bootstrap config, not managed by frontend
+DATABASE_URL=sqlite:///stake_watch.db
+API_HOST=0.0.0.0
+API_PORT=8000
+```
+
+### DB Config Tables
+
+```python
+class WalletRow(Base):
+    __tablename__ = "wallets"
+    id: int (PK, autoincrement)
+    chain: str              # "base" | "ethereum" | "solana" | "bsc"
+    address: str
+    label: str | None       # user-friendly name, e.g. "My Base Wallet"
+    created_at: datetime
+
+class RpcEndpointRow(Base):
+    __tablename__ = "rpc_endpoints"
+    id: int (PK, autoincrement)
+    chain: str (unique)
+    primary_url: str
+    fallback_urls: str      # JSON array of strings
+    updated_at: datetime
+
+class ProtocolConfigRow(Base):
+    __tablename__ = "protocol_configs"
+    id: int (PK, autoincrement)
+    name: str (unique)
+    chain: str
+    collector: str
+    enabled: bool = True
+    safety_rank: int | None
+    safety_score: float | None
+    reference_apy: str | None
+    primary_risks: str      # JSON array
+    vault_address: str | None
+    defillama_slug: str | None
+    created_at: datetime
+    updated_at: datetime
+
+class AppSettingsRow(Base):
+    __tablename__ = "app_settings"
+    key: str (PK)           # e.g. "intervals.positions", "risk.liquidation_warning"
+    value: str              # JSON-encoded value
+    updated_at: datetime
+```
+
+### REST API Endpoints
+
+```
+# Wallet management
+GET    /api/config/wallets           → list all wallets
+POST   /api/config/wallets           → add wallet {chain, address, label}
+PUT    /api/config/wallets/{id}      → update wallet
+DELETE /api/config/wallets/{id}      → remove wallet
+
+# RPC endpoint management
+GET    /api/config/rpc               → list all RPC configs
+PUT    /api/config/rpc/{chain}       → update RPC for chain {primary_url, fallback_urls}
+
+# Polling intervals
+GET    /api/config/intervals         → get all intervals
+PUT    /api/config/intervals         → update intervals {positions, protocol_stats, ...}
+
+# Risk thresholds
+GET    /api/config/risk              → get all risk thresholds
+PUT    /api/config/risk              → update thresholds {liquidation_warning, depeg_warning, ...}
+
+# Telegram config
+GET    /api/config/telegram          → get telegram config
+PUT    /api/config/telegram          → update {bot_token, chat_id}
+
+# Protocol management
+GET    /api/protocols                → list all protocols
+POST   /api/protocols                → add protocol
+PUT    /api/protocols/{id}           → update protocol
+PATCH  /api/protocols/{id}/toggle    → toggle enable/disable
+DELETE /api/protocols/{id}           → remove protocol
+
+# System status
+GET    /api/status                   → system health, uptime, last collection
+GET    /api/status/collectors        → per-collector status and error counts
+```
+
+### Frontend Pages
+
+| Page | URL | Purpose |
+|---|---|---|
+| Dashboard | `/` | Protocol status overview, collector health, last collection times |
+| Settings | `/settings` | Wallet management, RPC endpoints, intervals, risk thresholds, Telegram |
+| Protocols | `/protocols` | Protocol list with enable/disable toggle, add/edit forms |
+| Alerts | `/alerts` | Alert history and management (P2) |
+
+### Seed Data (config/seed.yaml)
+
+Used only for first-time DB initialization:
 
 ```yaml
-wallets:
-  - chain: solana
-    address: "<your-solana-wallet>"
-  - chain: ethereum
-    address: "<your-eth-wallet>"
-  - chain: bsc
-    address: "<your-bsc-wallet>"
-  - chain: base
-    address: "<your-base-wallet>"
+# config/seed.yaml — imported into DB on first startup only
+wallets: []
 
 rpc:
-  solana:
-    primary: "https://api.mainnet-beta.solana.com"
-    fallback: ["https://rpc.helius.xyz/?api-key=..."]
-  ethereum:
-    primary: "https://eth.public-rpc.com"
-    fallback: ["https://eth-mainnet.g.alchemy.com/v2/..."]
-  bsc:
-    primary: "https://bsc-dataseed.binance.org"
   base:
     primary: "https://mainnet.base.org"
-
-database:
-  url: "sqlite:///stake_watch.db"
-
-telegram:
-  bot_token: "${TELEGRAM_BOT_TOKEN}"
-  chat_id: "${TELEGRAM_CHAT_ID}"
+  ethereum:
+    primary: "https://eth.public-rpc.com"
+  solana:
+    primary: "https://api.mainnet-beta.solana.com"
+  bsc:
+    primary: "https://bsc-dataseed.binance.org"
 
 intervals:
-  positions: 300        # 5 min
-  protocol_stats: 900   # 15 min
-  stablecoin_price: 60  # 1 min
+  positions: 300
+  protocol_stats: 900
+  stablecoin_price: 60
   stablecoin_supply: 600
-  reserves: 21600       # 6 hours
+  reserves: 21600
 
 risk:
   liquidation_warning: 1.3
@@ -908,114 +1042,16 @@ risk:
   depeg_critical: 0.02
   tvl_crash_threshold: 0.15
   apy_change_threshold: 0.30
-```
 
-### protocols.yaml
-
-```yaml
 protocols:
-  # Base chain
   - name: aave_v3_base
     chain: base
-    collector: base_chain.aave_base
+    collector: defillama
+    defillama_slug: aave-v3
     safety_rank: 1
-    reference_apy: "~3.17%"
     safety_score: 8.8
-    primary_risks: ["shared pool bad debt", "utilization", "Base L2 risk"]
     enabled: true
-
-  - name: morpho_steakhouse_usdc
-    chain: base
-    collector: base_chain.morpho
-    vault_address: "<steakhouse-vault>"
-    safety_rank: 3
-    reference_apy: "~3.5-4.0%"
-    safety_score: 8.3
-    primary_risks: ["curator risk", "underlying market bad debt"]
-    enabled: true
-
-  - name: morpho_gauntlet_usdc_prime
-    chain: base
-    collector: base_chain.morpho
-    vault_address: "<gauntlet-prime-vault>"
-    safety_rank: 4
-    reference_apy: "~4.0%"
-    safety_score: 8.2
-    primary_risks: ["curator risk", "oracle", "market allocation"]
-    enabled: true
-
-  - name: morpho_pangolins_usdc
-    chain: base
-    collector: base_chain.morpho
-    vault_address: "<pangolins-vault>"
-    safety_rank: 7
-    reference_apy: "~4.07%"
-    safety_score: 7.5
-    primary_risks: ["Pangolins management capability", "rebalancing"]
-    enabled: true
-
-  # Ethereum
-  - name: sky_susds
-    chain: ethereum
-    collector: ethereum.sky_susds
-    safety_rank: 2
-    reference_apy: "~3.75%"
-    safety_score: 8.5
-    primary_risks: ["USDC-to-USDS conversion", "governance", "RWA exposure"]
-    enabled: true
-
-  - name: compound_v3_usdc
-    chain: ethereum
-    collector: ethereum.compound
-    safety_rank: 5
-    reference_apy: "~3-5%"
-    safety_score: 8.1
-    primary_risks: ["single collateral market risk", "utilization"]
-    enabled: true
-
-  - name: fluid_usdc
-    chain: ethereum
-    collector: ethereum.fluid
-    safety_rank: 6
-    reference_apy: "~5.4%"
-    safety_score: 7.8
-    primary_risks: ["complex contract system", "utilization"]
-    enabled: true
-
-  - name: morpho_gauntlet_frontier_usdc
-    chain: ethereum
-    collector: ethereum.morpho
-    vault_address: "<gauntlet-frontier-vault>"
-    safety_rank: 8
-    reference_apy: "~5.36%"
-    safety_score: 7.4
-    primary_risks: ["broader collateral acceptance for yield"]
-    enabled: true
-
-  # Solana
-  - name: jupiter_lend
-    chain: solana
-    collector: solana.jupiter_lend
-    safety_rank: 9
-    reference_apy: "~4.0-4.25%"
-    safety_score: 7.2
-    primary_risks: ["newer protocol", "unified liquidity", "withdrawal smoothing"]
-    enabled: true
-
-  - name: kamino_usdc
-    chain: solana
-    collector: solana.kamino
-    safety_rank: 10
-    reference_apy: "varies"
-    safety_score: 7.2
-    primary_risks: ["Solana risk", "oracle", "liquidation", "market parameters"]
-    enabled: true
-
-  # BSC
-  - name: venus_usdc
-    chain: bsc
-    collector: bsc.venus
-    enabled: true
+  # ... (same protocol list as §11)
 ```
 
 ---
@@ -1125,10 +1161,11 @@ async def detect_vault_version(vault_address: str, w3: Web3) -> str:
 
 ### Secrets & Config
 
-- `config/settings.yaml` → committed to git (contains structure, not secrets)
-- `config/settings.local.yaml` → gitignored, overrides with real wallet addresses, API keys
-- `.env` file via `python-dotenv` for `TELEGRAM_BOT_TOKEN`, RPC API keys
-- `config/settings.example.yaml` provided as template
+- `.env` for bootstrap-level config only: `DATABASE_URL`, `API_HOST`, `API_PORT`
+- All user-facing config (wallets, RPC keys, thresholds, protocols, Telegram) stored in DB
+- `config/seed.yaml` imported into DB on first startup when config tables are empty
+- RPC API keys stored as plaintext in DB (personal tool; encrypt if needed later)
+- Frontend served by FastAPI in production (static files), Vite dev server in development
 
 ### Telegram Rate Limiting
 
