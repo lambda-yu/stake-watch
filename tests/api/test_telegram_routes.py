@@ -99,9 +99,14 @@ async def test_bind_cancel(client):
 
 from stake_watch.api.routes.config import _extract_code_from_text
 
+# Private chat formats
 def test_extract_direct():
     assert _extract_code_from_text("123456", "123456") is True
 
+def test_extract_with_spaces():
+    assert _extract_code_from_text("  123456  ", "123456") is True
+
+# Group @mention formats (requires privacy mode OFF)
 def test_extract_with_at_mention():
     assert _extract_code_from_text("@mybot 123456", "123456") is True
 
@@ -111,20 +116,39 @@ def test_extract_at_mention_after():
 def test_extract_at_mention_newline():
     assert _extract_code_from_text("@mybot\n123456", "123456") is True
 
+# Group /command formats (works with privacy mode ON)
 def test_extract_bind_command():
     assert _extract_code_from_text("/bind 123456", "123456") is True
+
+def test_extract_bind_command_with_botname():
+    """Telegram appends @botname to commands in groups."""
+    assert _extract_code_from_text("/bind@StakeWatchBot 123456", "123456") is True
+
+def test_extract_bind_underscore():
+    """/bind_CODE format for groups."""
+    assert _extract_code_from_text("/bind_123456", "123456") is True
+
+def test_extract_bind_underscore_with_botname():
+    assert _extract_code_from_text("/bind_123456@StakeWatchBot", "123456") is True
 
 def test_extract_start_command():
     assert _extract_code_from_text("/start 123456", "123456") is True
 
+def test_extract_start_command_with_botname():
+    assert _extract_code_from_text("/start@MyBot 123456", "123456") is True
+
+def test_extract_verify_command():
+    assert _extract_code_from_text("/verify 123456", "123456") is True
+
+# Negative cases
 def test_extract_wrong_code():
     assert _extract_code_from_text("654321", "123456") is False
 
 def test_extract_partial():
     assert _extract_code_from_text("my code is 123456 ok", "123456") is False
 
-def test_extract_with_spaces():
-    assert _extract_code_from_text("  123456  ", "123456") is True
-
 def test_extract_at_only():
     assert _extract_code_from_text("@mybot", "123456") is False
+
+def test_extract_empty():
+    assert _extract_code_from_text("", "123456") is False

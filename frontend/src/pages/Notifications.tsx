@@ -200,11 +200,13 @@ export function Notifications() {
               </div>
             </div>
             <div className="bg-gray-800/50 rounded p-3 text-xs text-gray-500 space-y-1">
-              <p>1. 打开 Telegram，找到你创建的 Bot</p>
-              <p>2. 私聊发送：<span className="font-mono text-gray-300">{bindCode}</span></p>
-              <p>3. 或在群组中发送：<span className="font-mono text-gray-300">@你的Bot名 {bindCode}</span></p>
-              <p>4. 系统自动识别并完成绑定，告警将推送到该聊天</p>
-              <p className="text-gray-600">支持格式：直接发送验证码 / @bot 验证码 / /bind 验证码</p>
+              <p className="font-semibold text-gray-400 mb-1">私聊绑定：</p>
+              <p>打开 Bot 私聊，直接发送：<span className="font-mono text-gray-300">{bindCode}</span></p>
+              <p className="font-semibold text-gray-400 mt-2 mb-1">群组绑定（推荐，告警直接推到群）：</p>
+              <p>在群组中发送：<span className="font-mono text-gray-300">/bind {bindCode}</span></p>
+              <p className="text-gray-600 mt-2">
+                注意：群组中 Bot 默认只能接收 /命令 格式。如需 @bot 格式，请在 BotFather 中发送 /setprivacy 选择 Disable。
+              </p>
             </div>
             <button onClick={handleCancelBind}
               className="text-gray-400 hover:text-gray-200 text-sm">

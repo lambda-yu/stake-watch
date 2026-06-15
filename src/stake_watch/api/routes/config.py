@@ -172,15 +172,31 @@ import re
 
 def _extract_code_from_text(text: str, code: str) -> bool:
     """Match verification code in various message formats:
-    - "123456" (direct)
-    - "@botname 123456"
+
+    Group (privacy mode ON — only /commands get through):
     - "/bind 123456"
+    - "/bind@mybot 123456"
+    - "/bind_123456"
+    - "/bind_123456@mybot"
     - "/start 123456"
+    - "/verify 123456"
+
+    Private chat or group (privacy mode OFF):
+    - "123456"
+    - "@botname 123456"
     - "123456 @botname"
-    - "@botname\n123456"
     """
-    cleaned = re.sub(r'@\S+', '', text).strip()
-    cleaned = re.sub(r'^/(bind|start|verify)\s*', '', cleaned).strip()
+    stripped = text.strip()
+    # Handle /command@botname format (Telegram appends @botname in groups)
+    cmd_match = re.match(r'^/(bind|start|verify)(?:@\S+)?\s+(.*)', stripped)
+    if cmd_match:
+        return cmd_match.group(2).strip() == code
+    # Handle /bind_CODE@botname format
+    underscore_match = re.match(r'^/(bind|start|verify)_([\d]+)(?:@\S+)?$', stripped)
+    if underscore_match:
+        return underscore_match.group(2) == code
+    # Handle plain text: strip @mentions
+    cleaned = re.sub(r'@\S+', '', stripped).strip()
     return cleaned == code
 
 
