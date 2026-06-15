@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from stake_watch.models.common import Chain, PositionType
 from stake_watch.models.position import Position
 from stake_watch.models.protocol import PoolStats, ProtocolStats
-from stake_watch.storage.tables import Base, PositionRow, ProtocolStatsRow
+from stake_watch.storage.tables import Base, PositionRow, ProtocolStatsRow, AlertRow
+from stake_watch.models.alert import Alert as AlertModel, RuleType, Severity
 
 
 class Storage:
@@ -132,3 +133,39 @@ class Storage:
                 pools=pools,
                 updated_at=row.updated_at,
             )
+
+    async def save_alert(self, alert):
+        async with self._session_factory() as session:
+            row = AlertRow(
+                rule_type=alert.rule_type.value,
+                severity=alert.severity.value,
+                protocol=alert.protocol,
+                chain=alert.chain,
+                title=alert.title,
+                message=alert.message,
+                details_json=json.dumps(alert.details) if alert.details else None,
+                dedup_key=alert.dedup_key,
+                created_at=alert.created_at,
+            )
+            session.add(row)
+            await session.commit()
+
+    async def get_recent_alerts(self, limit: int = 50):
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(AlertRow).order_by(AlertRow.created_at.desc()).limit(limit)
+            )
+            rows = result.scalars().all()
+            return [
+                AlertModel(
+                    rule_type=RuleType(r.rule_type),
+                    severity=Severity(r.severity),
+                    protocol=r.protocol,
+                    chain=r.chain,
+                    title=r.title,
+                    message=r.message,
+                    details=json.loads(r.details_json) if r.details_json else None,
+                    created_at=r.created_at,
+                )
+                for r in rows
+            ]
