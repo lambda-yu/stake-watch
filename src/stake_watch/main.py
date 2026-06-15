@@ -1,29 +1,35 @@
 from __future__ import annotations
 import asyncio
 import logging
-from pathlib import Path
-import uvicorn
-from stake_watch.api.app import create_app
+import os
 from stake_watch.collectors.base import BaseCollector
 from stake_watch.collectors.registry import build_collector
-from stake_watch.config import load_protocols, load_settings
-from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
+from stake_watch.config import AppSettings, ProtocolEntry
+from stake_watch.storage.config_store import ConfigStore
 from stake_watch.storage.db import Storage
+from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
 
 logger = logging.getLogger(__name__)
 
-async def build_app(settings_path=None, protocols_path=None, local_settings_path=None):
-    settings_path = settings_path or Path("config/settings.yaml")
-    protocols_path = protocols_path or Path("config/protocols.yaml")
-    local_settings_path = local_settings_path or Path("config/settings.local.yaml")
-    settings = load_settings(settings_path, local_path=local_settings_path)
-    protocols = load_protocols(protocols_path) if protocols_path.exists() else []
-    db_url = settings.database.url
+async def build_app(db_url: str | None = None, seed_path: str = "config/seed.yaml"):
+    db_url = db_url or os.environ.get("DATABASE_URL", "sqlite:///stake_watch.db")
     if not db_url.startswith("sqlite+aiosqlite"):
         db_url = db_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+
     storage = Storage(db_url)
     await storage.initialize()
-    rpc_urls = {chain: ep.primary for chain, ep in settings.rpc.items()}
+
+    config_store = ConfigStore(storage._session_factory)
+    imported = await config_store.import_seed_if_empty(seed_path)
+    if imported:
+        logger.info("Imported seed data into DB")
+
+    settings = await config_store.load_app_settings()
+    protocols = await config_store.list_protocol_entries()
+
+    rpc_list = await config_store.list_rpc()
+    rpc_urls = {r.chain: r.primary_url for r in rpc_list}
+
     collectors: list[BaseCollector] = []
     for entry in protocols:
         if not entry.enabled:
@@ -31,9 +37,11 @@ async def build_app(settings_path=None, protocols_path=None, local_settings_path
         collector = build_collector(entry, rpc_urls=rpc_urls)
         if collector:
             collectors.append(collector)
+
     wallets = [w.address for w in settings.wallets]
     runner = CollectionRunner(collectors=collectors, storage=storage, wallets=wallets or [""])
     return runner, storage, settings
+
 
 async def main():
     logging.basicConfig(
@@ -42,6 +50,7 @@ async def main():
     )
     runner, storage, settings = await build_app()
 
+    from stake_watch.api.app import create_app
     app = create_app(storage)
 
     scheduled = ScheduledRunner(
@@ -58,6 +67,7 @@ async def main():
     await scheduled.trigger_now()
     scheduled.start()
 
+    import uvicorn
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
     try:
@@ -65,6 +75,7 @@ async def main():
     finally:
         scheduled.stop()
         await storage.close()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

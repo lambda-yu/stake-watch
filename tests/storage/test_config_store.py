@@ -63,3 +63,56 @@ async def test_load_full_settings(config_store):
     settings = await config_store.load_app_settings()
     assert settings.intervals.positions == 300
     assert settings.risk.liquidation_warning == 1.3
+
+@pytest.mark.asyncio
+async def test_import_seed(config_store, tmp_path):
+    seed = tmp_path / "seed.yaml"
+    seed.write_text("""
+rpc:
+  base:
+    primary: "https://mainnet.base.org"
+intervals:
+  positions: 120
+risk:
+  depeg_warning: 0.01
+protocols:
+  - name: test_proto
+    chain: base
+    collector: defillama
+    defillama_slug: test-slug
+    enabled: true
+    safety_score: 7.5
+wallets:
+  - chain: base
+    address: "0xTestWallet"
+""")
+    result = await config_store.import_seed_if_empty(str(seed))
+    assert result is True
+
+    # Verify imported data
+    protos = await config_store.list_protocols()
+    assert len(protos) == 1
+    assert protos[0].name == "test_proto"
+
+    rpc = await config_store.get_rpc("base")
+    assert rpc.primary_url == "https://mainnet.base.org"
+
+    val = await config_store.get_setting("intervals.positions")
+    assert val == 120
+
+    wallets = await config_store.list_wallets()
+    assert len(wallets) == 1
+
+    # Second import should be no-op
+    result2 = await config_store.import_seed_if_empty(str(seed))
+    assert result2 is False
+
+
+@pytest.mark.asyncio
+async def test_list_protocol_entries(config_store):
+    await config_store.add_protocol(name="test", chain="base", collector="defillama",
+        defillama_slug="test-slug", safety_score=8.0, enabled=True)
+    entries = await config_store.list_protocol_entries()
+    assert len(entries) == 1
+    assert entries[0].name == "test"
+    assert entries[0].defillama_slug == "test-slug"

@@ -114,6 +114,67 @@ class ConfigStore:
             row = result.scalar_one_or_none()
             return json.loads(row.value) if row else None
 
+    async def import_seed_if_empty(self, seed_path: str = "config/seed.yaml"):
+        """Import seed.yaml into DB if no protocols exist yet."""
+        import yaml
+        from pathlib import Path
+
+        existing = await self.list_protocols()
+        if existing:
+            return False  # DB already has data
+
+        path = Path(seed_path)
+        if not path.exists():
+            return False
+
+        data = yaml.safe_load(path.read_text()) or {}
+
+        # Import RPC endpoints
+        for chain, rpc_data in data.get("rpc", {}).items():
+            primary = rpc_data if isinstance(rpc_data, str) else rpc_data.get("primary", "")
+            fallback = [] if isinstance(rpc_data, str) else rpc_data.get("fallback", [])
+            await self.upsert_rpc(chain, primary, fallback)
+
+        # Import intervals
+        for key, value in data.get("intervals", {}).items():
+            await self.set_setting(f"intervals.{key}", value)
+
+        # Import risk thresholds
+        for key, value in data.get("risk", {}).items():
+            await self.set_setting(f"risk.{key}", value)
+
+        # Import protocols
+        for proto in data.get("protocols", []):
+            await self.add_protocol(
+                name=proto["name"], chain=proto["chain"], collector=proto["collector"],
+                enabled=proto.get("enabled", True),
+                safety_rank=proto.get("safety_rank"),
+                safety_score=proto.get("safety_score"),
+                reference_apy=proto.get("reference_apy"),
+                primary_risks=proto.get("primary_risks", []),
+                vault_address=proto.get("vault_address"),
+                defillama_slug=proto.get("defillama_slug"))
+
+        # Import wallets
+        for wallet in data.get("wallets", []):
+            if wallet.get("address"):
+                await self.add_wallet(wallet["chain"], wallet["address"], wallet.get("label"))
+
+        return True
+
+    async def list_protocol_entries(self) -> list:
+        """Return protocols as ProtocolEntry objects for collector building."""
+        import json
+        from stake_watch.config import ProtocolEntry
+        rows = await self.list_protocols()
+        return [ProtocolEntry(
+            name=r.name, chain=r.chain, collector=r.collector, enabled=r.enabled,
+            safety_rank=r.safety_rank, safety_score=r.safety_score,
+            reference_apy=r.reference_apy,
+            primary_risks=json.loads(r.primary_risks) if r.primary_risks else [],
+            vault_address=r.vault_address, defillama_slug=r.defillama_slug
+        ) for r in rows]
+
     async def load_app_settings(self) -> AppSettings:
         async with self._sf() as s:
             result = await s.execute(select(AppSettingsRow))
