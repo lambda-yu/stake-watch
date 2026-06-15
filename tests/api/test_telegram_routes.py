@@ -55,3 +55,41 @@ async def test_telegram_test_unconfigured(client):
     data = resp.json()
     assert data["success"] is False
     assert "未配置" in data["error"]
+
+
+@pytest.mark.asyncio
+async def test_bind_start_no_token(client):
+    resp = await client.post("/api/config/telegram/bind/start")
+    data = resp.json()
+    assert data["success"] is False
+    assert "Bot Token" in data["error"]
+
+
+@pytest.mark.asyncio
+async def test_bind_start_with_token(client):
+    await client.put("/api/config/telegram", json={"bot_token": "fake:token"})
+    resp = await client.post("/api/config/telegram/bind/start")
+    data = resp.json()
+    assert data["success"] is True
+    assert len(data["code"]) == 6
+    assert data["code"].isdigit()
+    # Clean up
+    await client.post("/api/config/telegram/bind/cancel")
+
+
+@pytest.mark.asyncio
+async def test_bind_status_idle(client):
+    from stake_watch.api.routes.config import _bind_state
+    _bind_state.clear()
+    resp = await client.get("/api/config/telegram/bind/status")
+    data = resp.json()
+    assert data["status"] == "idle"
+
+
+@pytest.mark.asyncio
+async def test_bind_cancel(client):
+    await client.put("/api/config/telegram", json={"bot_token": "fake:token"})
+    await client.post("/api/config/telegram/bind/start")
+    resp = await client.post("/api/config/telegram/bind/cancel")
+    data = resp.json()
+    assert data["status"] == "cancelled"

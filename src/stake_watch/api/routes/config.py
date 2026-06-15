@@ -1,4 +1,8 @@
 import json
+import asyncio
+import random
+import string
+import time
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from stake_watch.api.deps import get_config_store
@@ -107,3 +111,89 @@ async def test_telegram(store: ConfigStore = Depends(get_config_store)):
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# --- Telegram Bind (listen for verification code) ---
+
+_bind_state: dict = {}  # {"code": str, "expires": float, "task": Task|None, "chat_id": str|None, "status": str}
+
+
+def _generate_code() -> str:
+    return ''.join(random.choices(string.digits, k=6))
+
+
+@router.post("/telegram/bind/start")
+async def start_bind(store: ConfigStore = Depends(get_config_store)):
+    bot_token = await store.get_setting("telegram.bot_token")
+    if not bot_token:
+        return {"success": False, "error": "请先填写 Bot Token"}
+
+    code = _generate_code()
+    _bind_state.clear()
+    _bind_state.update({
+        "code": code,
+        "expires": time.time() + 300,
+        "chat_id": None,
+        "status": "waiting",
+    })
+
+    task = asyncio.create_task(_poll_for_code(bot_token, code, store))
+    _bind_state["task"] = task
+
+    return {"success": True, "code": code, "expires_in": 300}
+
+
+@router.get("/telegram/bind/status")
+async def bind_status():
+    if not _bind_state:
+        return {"status": "idle"}
+    if time.time() > _bind_state.get("expires", 0):
+        _cancel_bind()
+        return {"status": "expired"}
+    if _bind_state.get("status") == "bound":
+        return {"status": "bound", "chat_id": _bind_state.get("chat_id")}
+    return {"status": "waiting", "code": _bind_state.get("code")}
+
+
+@router.post("/telegram/bind/cancel")
+async def cancel_bind():
+    _cancel_bind()
+    return {"status": "cancelled"}
+
+
+def _cancel_bind():
+    task = _bind_state.get("task")
+    if task and not task.done():
+        task.cancel()
+    _bind_state.clear()
+
+
+async def _poll_for_code(bot_token: str, code: str, store: ConfigStore):
+    try:
+        from telegram import Bot
+        bot = Bot(token=bot_token)
+        offset = None
+
+        while time.time() < _bind_state.get("expires", 0):
+            try:
+                updates = await bot.get_updates(offset=offset, timeout=5, allowed_updates=["message"])
+                for update in updates:
+                    offset = update.update_id + 1
+                    msg = update.message
+                    if msg and msg.text and msg.text.strip() == code:
+                        chat_id = str(msg.chat_id)
+                        await store.set_setting("telegram.chat_id", chat_id)
+                        _bind_state["chat_id"] = chat_id
+                        _bind_state["status"] = "bound"
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=f"Stake Watch 绑定成功\n\nChat ID: {chat_id}\n验证码: {code}"
+                        )
+                        return
+            except Exception:
+                await asyncio.sleep(2)
+            await asyncio.sleep(1)
+
+        _bind_state["status"] = "expired"
+    except asyncio.CancelledError:
+        pass
