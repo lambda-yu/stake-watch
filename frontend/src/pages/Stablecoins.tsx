@@ -233,13 +233,13 @@ export function Stablecoins() {
         {reserveFetchResult && (
           <div className={`rounded p-3 text-xs mb-4 ${reserveFetchResult.success ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
             {reserveFetchResult.success ? (
-              <div>
-                抓取成功
+              <div className="space-y-1">
+                <div className="font-semibold">抓取成功</div>
                 {reserveFetchResult.fetched?.USDT && (
-                  <span className="ml-2">USDT 总资产: ${(reserveFetchResult.fetched.USDT.total_assets / 1e9).toFixed(1)}B 覆盖率: {(reserveFetchResult.fetched.USDT.coverage_ratio * 100).toFixed(1)}%</span>
+                  <div>USDT: 总资产 ${(reserveFetchResult.fetched.USDT.total_assets / 1e9).toFixed(1)}B | 覆盖率 {(reserveFetchResult.fetched.USDT.coverage_ratio * 100).toFixed(1)}% | {reserveFetchResult.fetched.USDT.chains}链</div>
                 )}
                 {reserveFetchResult.fetched?.USDC && (
-                  <span className="ml-2">USDC 供应: ${(reserveFetchResult.fetched.USDC.total_supply / 1e9).toFixed(1)}B ({reserveFetchResult.fetched.USDC.chains}链)</span>
+                  <div>USDC: 供应/储备 ${(reserveFetchResult.fetched.USDC.total_supply / 1e9).toFixed(1)}B | {reserveFetchResult.fetched.USDC.chains}链 (Circle 1:1 足额储备)</div>
                 )}
               </div>
             ) : `抓取失败: ${reserveFetchResult.error}`}

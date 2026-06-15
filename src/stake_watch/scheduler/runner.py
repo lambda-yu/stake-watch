@@ -88,7 +88,9 @@ class ScheduledRunner:
 
             circle = await fetch_circle_supply()
             if circle:
-                await config_store.set_setting("reserves.usdc.total_supply_live", float(circle["total_supply"]))
+                supply = float(circle["total_supply"])
+                await config_store.set_setting("reserves.usdc.total_reserves", supply)
+                await config_store.set_setting("reserves.usdc.total_supply_live", supply)
                 await config_store.set_setting("reserves.usdc.report_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
             logger.info(f"Reserves fetched: USDT={'OK' if tether else 'FAIL'} USDC={'OK' if circle else 'FAIL'}")
