@@ -5,19 +5,19 @@ import { WalletForm } from '../components/WalletForm';
 const INTERVAL_LABELS: Record<string, string> = {
   positions: '仓位采集',
   protocol_stats: '协议统计',
-  stablecoin_price: '稳定币价格',
-  stablecoin_supply: '稳定币供应量',
   reserves: '储备报告',
 };
+
+const INTERVAL_HIDDEN = new Set(['stablecoin_price', 'stablecoin_supply']);
 
 const RISK_LABELS: Record<string, string> = {
   liquidation_warning: '清算预警阈值',
   liquidation_critical: '清算严重阈值',
-  depeg_warning: '脱锚预警阈值',
-  depeg_critical: '脱锚严重阈值',
   tvl_crash_threshold: 'TVL 暴跌阈值',
   apy_change_threshold: 'APY 波动阈值',
 };
+
+const RISK_HIDDEN = new Set(['depeg_warning', 'depeg_critical']);
 
 export function Settings() {
   const [wallets, setWallets] = useState<any[]>([]);
@@ -60,8 +60,9 @@ export function Settings() {
 
       <section>
         <h2 className="text-xl font-semibold mb-3">采集间隔 (秒)</h2>
+        <p className="text-gray-600 text-xs mb-3">稳定币采集频率请在「稳定币监控」页面配置</p>
         <div className="grid grid-cols-2 gap-3">
-          {Object.entries(intervals).map(([key, val]) => (
+          {Object.entries(intervals).filter(([key]) => !INTERVAL_HIDDEN.has(key)).map(([key, val]) => (
             <div key={key} className="flex items-center gap-2">
               <label className="text-sm text-gray-400 w-40">{INTERVAL_LABELS[key] || key}</label>
               <input type="number" value={val as number}
@@ -74,8 +75,9 @@ export function Settings() {
 
       <section>
         <h2 className="text-xl font-semibold mb-3">风险阈值</h2>
+        <p className="text-gray-600 text-xs mb-3">脱锚阈值请在「稳定币监控」页面配置</p>
         <div className="grid grid-cols-2 gap-3">
-          {Object.entries(risk).map(([key, val]) => (
+          {Object.entries(risk).filter(([key]) => !RISK_HIDDEN.has(key)).map(([key, val]) => (
             <div key={key} className="flex items-center gap-2">
               <label className="text-sm text-gray-400 w-48">{RISK_LABELS[key] || key}</label>
               <input type="number" step="0.01" value={val as number}

@@ -52,4 +52,7 @@ export const api = {
   status: {
     get: () => request<any>('/status'),
   },
+  stablecoins: {
+    snapshots: () => request<any[]>('/stablecoins'),
+  },
 };

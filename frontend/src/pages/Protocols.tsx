@@ -25,7 +25,10 @@ export function Protocols() {
   return (
     <div className="max-w-4xl">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">协议管理</h1>
+        <div>
+          <h1 className="text-2xl font-bold">质押协议</h1>
+          <p className="text-gray-500 text-sm mt-1">管理链上借贷和质押协议的监控配置</p>
+        </div>
         <button onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
           {showForm ? '取消' : '添加协议'}

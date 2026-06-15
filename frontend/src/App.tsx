@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { Settings } from './pages/Settings';
 import { Protocols } from './pages/Protocols';
+import { Stablecoins } from './pages/Stablecoins';
 import { Notifications } from './pages/Notifications';
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -12,15 +13,18 @@ function Layout({ children }: { children: React.ReactNode }) {
         <NavLink to="/" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
         }>仪表盘</NavLink>
-        <NavLink to="/settings" className={({ isActive }) =>
-          isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
-        }>设置</NavLink>
         <NavLink to="/protocols" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
-        }>协议管理</NavLink>
+        }>质押协议</NavLink>
+        <NavLink to="/stablecoins" className={({ isActive }) =>
+          isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
+        }>稳定币监控</NavLink>
         <NavLink to="/notifications" className={({ isActive }) =>
           isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
         }>推送配置</NavLink>
+        <NavLink to="/settings" className={({ isActive }) =>
+          isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
+        }>设置</NavLink>
       </nav>
       <main className="p-6">{children}</main>
     </div>
@@ -33,9 +37,10 @@ export default function App() {
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/protocols" element={<Protocols />} />
+          <Route path="/stablecoins" element={<Stablecoins />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </Layout>
     </BrowserRouter>
