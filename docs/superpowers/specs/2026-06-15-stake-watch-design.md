@@ -74,20 +74,24 @@ stake-watch/
 │       │   │   ├── compound.py
 │       │   │   ├── fluid.py
 │       │   │   ├── sky_susds.py
-│       │   │   ├── morpho.py          # Morpho Gauntlet Frontier on ETH
 │       │   │   ├── lido.py
 │       │   │   └── eigenlayer.py
 │       │   ├── bsc/
 │       │   │   └── venus.py
 │       │   ├── base_chain/
-│       │   │   ├── aave_base.py
-│       │   │   └── morpho/
-│       │   │       ├── vault.py            # Vault-level: shares, allocation, queue
-│       │   │       ├── market.py           # Per-market: utilization, liquidity, LLTV
-│       │   │       ├── oracle.py           # Oracle health & cross-validation
-│       │   │       ├── bad_debt.py         # Bad debt & stress testing
-│       │   │       ├── governance.py       # Curator/owner/allocator events
-│       │   │       └── withdrawal_sim.py   # 10%/50%/100% withdrawal simulation
+│       │   │   └── aave_base.py
+│       │   ├── morpho/                    # Shared across Base + Ethereum
+│       │   │   ├── base_morpho.py         # Shared vault/market reading
+│       │   │   ├── models.py              # Morpho-specific data models
+│       │   │   ├── vault.py               # Vault: shares, allocation, queue, version
+│       │   │   ├── market.py              # Per-market: utilization, liquidity, LLTV
+│       │   │   ├── oracle.py              # Oracle health & cross-validation
+│       │   │   ├── bad_debt.py            # Bad debt & stress testing
+│       │   │   ├── governance.py          # Curator/owner/allocator events
+│       │   │   ├── withdrawal_sim.py      # 10%/50%/100% withdrawal simulation
+│       │   │   ├── adapters.py            # V2 adapter monitoring
+│       │   │   ├── chain_base.py          # Base-specific: addresses, sequencer
+│       │   │   └── chain_ethereum.py      # Ethereum-specific: addresses
 │       │   └── stablecoin/
 │       │       ├── price.py              # Layer 1: Multi-source price depeg
 │       │       ├── dex_liquidity.py      # Layer 2: DEX pool skew + slippage sim
@@ -198,10 +202,13 @@ class ProtocolStats(BaseModel):
 
 ### RPC Data Sources
 
-- Solana: Public RPC + Helius/Triton fallback
-- EVM chains: Public RPC + Alchemy/Infura fallback
+- Solana: Helius (paid, primary) + public RPC fallback
+- Ethereum: Alchemy or Infura (paid, primary) + public RPC fallback
+- Base: Alchemy Base (paid, primary) + public RPC fallback
+- BSC: Public RPC (lower polling frequency acceptable)
 - Auxiliary: DefiLlama API (TVL/APY), CoinGecko (prices)
 - All endpoints configured in `settings.yaml` with auto-failover
+- **Paid RPC required for ETH and Base** due to sub-minute polling cadence; public endpoints rate-limit too aggressively
 
 ---
 
@@ -431,15 +438,17 @@ Your withdrawable liquidity = vault idle assets + underlying market available li
 
 **7-dimension weighted model (0–100, higher = more risky):**
 
-| Dimension | Weight |
-|---|---|
-| Depeg risk | 25% |
-| DEX liquidity risk | 15% |
-| Redemption pressure | 15% |
-| Reserve risk | 20% |
-| Issuer & regulatory risk | 10% |
-| On-chain contract risk | 10% |
-| Cross-chain version risk | 5% |
+Layer 8 (Protocol Exposure) is excluded from the composite score — it feeds per-position alerts and hard triggers (withdrawal simulation failure) rather than the aggregate stablecoin risk score.
+
+| Dimension | Weight | Source Layer |
+|---|---|---|
+| Depeg risk | 25% | Layer 1 |
+| DEX liquidity risk | 15% | Layer 2 |
+| Redemption pressure | 15% | Layer 3 |
+| Reserve risk | 20% | Layer 4 |
+| Issuer & regulatory risk | 10% | Layer 5 |
+| On-chain contract risk | 10% | Layers 5+6 |
+| Cross-chain version risk | 5% | Layer 6 |
 
 **Risk levels:**
 
@@ -733,17 +742,19 @@ Base-specific risks that affect all protocols on the chain:
 
 ### Morpho Composite Risk Scoring
 
-**Vault-level score (0-100, higher = more risky):**
+**7-dimension weighted model mapping 10 layers to scoring dimensions:**
 
-| Dimension | Weight |
-|---|---|
-| Market utilization & liquidity | 20% |
-| Bad debt & stress test | 20% |
-| Oracle health | 15% |
-| LLTV risk profile | 15% |
-| Curator & governance | 15% |
-| Base L2 network | 10% |
-| Vault version & adapter risk | 5% |
+Layers M1 (Allocation) and M3 (Withdrawal Queue) feed into the "Market utilization & liquidity" dimension. Layer M9 (Adapter) feeds "Vault version & adapter risk".
+
+| Dimension | Weight | Source Layers |
+|---|---|---|
+| Market utilization & liquidity | 20% | M1, M2, M3 |
+| Bad debt & stress test | 20% | M5, M6 |
+| Oracle health | 15% | M7 |
+| LLTV risk profile | 15% | M4 |
+| Curator & governance | 15% | M8 |
+| Base L2 network | 10% | M10 |
+| Vault version & adapter risk | 5% | M6, M9 |
 
 **11 hard triggers (bypass scoring, immediate CRITICAL):**
 
@@ -775,12 +786,12 @@ Base-specific risks that affect all protocols on the chain:
 | Metric | Frequency |
 |---|---|
 | Utilization & liquidity | 1 min |
-| Oracle prices | 15-30 sec |
-| Withdrawal simulation | 3-5 min |
-| Vault governance events | WebSocket real-time |
+| Oracle prices | 60 sec |
+| Withdrawal simulation | 5 min |
+| Vault governance events | WebSocket real-time (fallback: 1 min polling) |
 | Borrower position risk | 1 min |
 | Stress testing | 5 min |
-| Base network status | 15 sec |
+| Base network status | 30 sec |
 
 ---
 
@@ -822,7 +833,7 @@ Only Telegram in V1. BaseNotifier allows future Discord/email additions.
 
 ---
 
-## 7. Delivery Phases
+## 8. Delivery Phases
 
 | Phase | Scope | Depends on |
 |---|---|---|
@@ -849,7 +860,7 @@ Only Telegram in V1. BaseNotifier allows future Discord/email additions.
 
 ---
 
-## 8. Configuration
+## 9. Configuration
 
 ### settings.yaml
 
@@ -1009,7 +1020,7 @@ protocols:
 
 ---
 
-## 9. Key Design Decisions
+## 10. Key Design Decisions
 
 1. **One collector per protocol file** — all inherit BaseCollector with unified `collect()` interface
 2. **Config-driven** — adding a new protocol only requires a collector file + config entry
@@ -1024,7 +1035,7 @@ protocols:
 
 ---
 
-## 10. Protocol Safety Reference (USDC Supply)
+## 11. Protocol Safety Reference (USDC Supply)
 
 Baseline safety ranking for monitored protocols, used as reference for risk weighting:
 
@@ -1042,3 +1053,99 @@ Baseline safety ranking for monitored protocols, used as reference for risk weig
 | 10 | Kamino USDC Lending | Solana | ~varies | 7.2/10 | Solana, oracle, liquidation, market parameters |
 
 **Note:** Safety scores are baseline references as of 2026-06-15. Real-time risk assessment by the risk engine may differ based on current on-chain conditions.
+
+---
+
+## 12. Implementation Notes (from spec review)
+
+### Morpho Borrower Enumeration (Layer M5)
+
+Enumerating all borrowers per market via RPC is impractical. Approach:
+- **Primary:** Use Morpho Blue subgraph (The Graph / Goldsky) to query active borrowers per market
+- **Fallback:** Index Supply/Borrow/Repay/Liquidate events from market creation block, maintain local borrower set in SQLite
+- **Optimization:** Only track borrowers with health_factor < 2.0 (pruned set for stress testing)
+- Add `events/indexer.py` module for event subscription and catchup
+
+### Reserve Monitoring Data Sources (Stablecoin Layer 4)
+
+- **USDC:** DefiLlama stablecoin API for circulating supply per chain; Circle transparency page scrape (monthly attestation PDF) with manual override config
+- **USDT:** DefiLlama stablecoin API; Tether transparency page scrape; manual `config/reserves_override.yaml` for quarterly report data
+- **Report delay detection:** Track last-known report date in DB; compare against expected cadence (Circle: monthly, Tether: quarterly)
+- Accept that this layer has lower automation — manual review supplements automated checks
+
+### Morpho Collector Structure (refactored)
+
+Shared Morpho abstractions across chains to avoid duplication:
+
+```
+collectors/morpho/
+├── base_morpho.py          # Shared: vault reading, market parsing, oracle check
+├── models.py               # MorphoMarketAllocation, VaultState, OracleHealth
+├── vault.py                # Vault shares, allocation, queue, version detection
+├── market.py               # Per-market utilization, liquidity, LLTV
+├── oracle.py               # Oracle health, cross-validation
+├── bad_debt.py             # Borrower risk, stress test
+├── governance.py           # Curator/owner/allocator events
+├── withdrawal_sim.py       # 10%/50%/100% withdrawal simulation
+├── adapters.py             # V2 adapter monitoring
+├── chain_base.py           # Base-specific: vault addresses, sequencer check
+└── chain_ethereum.py       # Ethereum-specific: vault addresses
+```
+
+### Vault Version Detection
+
+```python
+async def detect_vault_version(vault_address: str, w3: Web3) -> str:
+    # V2 has adapter-related functions
+    try:
+        await call_contract(vault_address, "adapterRegistry()")
+        return "v2"
+    except:
+        pass
+    # V1.1 has specific storage layout differences
+    try:
+        await call_contract(vault_address, "config()")  # V1.1-only
+        return "v1.1"
+    except:
+        return "v1.0"
+```
+
+### Database Retention Policy
+
+| Data | Raw Retention | Aggregation |
+|---|---|---|
+| Positions & metrics | 7 days | 1-min avg → 30 days, hourly avg → forever |
+| Alerts | Forever | — |
+| Stablecoin prices | 7 days | 1-min → 30 days |
+| Protocol stats | 30 days | hourly → forever |
+
+- WAL checkpoint every 5 minutes
+- VACUUM weekly via scheduled task
+- Monitor DB file size; warn if >500MB
+
+### Secrets & Config
+
+- `config/settings.yaml` → committed to git (contains structure, not secrets)
+- `config/settings.local.yaml` → gitignored, overrides with real wallet addresses, API keys
+- `.env` file via `python-dotenv` for `TELEGRAM_BOT_TOKEN`, RPC API keys
+- `config/settings.example.yaml` provided as template
+
+### Telegram Rate Limiting
+
+- Notifier maintains internal queue with 1 msg/sec rate limit per chat
+- Burst events (flash crash + multiple liquidations): batch into single summary message if >5 alerts within 30 sec
+- `/mute <rule> <duration>` command via Telegram Bot for suppressing known issues
+
+### Stablecoin Layer 3 Chain Scope
+
+Layer 3 (supply monitoring) covers: Ethereum, Base, Solana, BSC (matching monitored chains). Arbitrum, Optimism, and Tron tracked as aggregate via DefiLlama stablecoin API only — no direct RPC, no dedicated collectors.
+
+### Depeg Threshold Reconciliation
+
+| Source | Threshold | Meaning |
+|---|---|---|
+| §4 Risk Engine defaults | >0.5% warning, >2% critical | Generic rule defaults |
+| §5 Layer 1 detection | >0.3%+10min caution, >0.5%+5min warning, >1% immediate critical | Stablecoin-specific with duration |
+| §5 Hard trigger | <$0.98 (2%) | Bypasses all scoring, immediate action |
+
+Layer 1 detection is the authoritative source for stablecoin depeg. §4 defaults are overridden by the stablecoin-specific rules. Hard trigger is the last line of defense.
