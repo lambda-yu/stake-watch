@@ -13,7 +13,7 @@ class ReserveReport(BaseModel):
     total_reserves: Decimal
     circulating_supply: Decimal
     coverage_ratio: float
-    composition: dict[str, float]
+    composition: dict[str, str | float]
     report_cadence_days: int
     days_since_report: int
     is_overdue: bool
