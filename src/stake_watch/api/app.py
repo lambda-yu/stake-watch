@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from stake_watch.api import deps
-from stake_watch.api.routes import config, protocols, status, alerts
+from stake_watch.api.routes import config, protocols, status, alerts, stablecoins
 from stake_watch.storage.db import Storage
 
 def create_app(storage: Storage) -> FastAPI:
@@ -13,4 +13,5 @@ def create_app(storage: Storage) -> FastAPI:
     app.include_router(protocols.router, prefix="/api/protocols", tags=["protocols"])
     app.include_router(status.router, prefix="/api/status", tags=["status"])
     app.include_router(alerts.router, prefix="/api/alerts", tags=["alerts"])
+    app.include_router(stablecoins.router, prefix="/api/stablecoins", tags=["stablecoins"])
     return app

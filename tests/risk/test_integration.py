@@ -5,7 +5,7 @@ from stake_watch.risk.rules import get_default_rules
 
 def test_default_rules_loaded():
     rules = get_default_rules()
-    assert len(rules) == 8
+    assert len(rules) == 12
 
 def test_full_evaluation_cycle():
     engine = RuleEngine(rules=get_default_rules())
