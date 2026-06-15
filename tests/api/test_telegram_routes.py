@@ -93,3 +93,38 @@ async def test_bind_cancel(client):
     resp = await client.post("/api/config/telegram/bind/cancel")
     data = resp.json()
     assert data["status"] == "cancelled"
+
+
+# --- Code extraction tests ---
+
+from stake_watch.api.routes.config import _extract_code_from_text
+
+def test_extract_direct():
+    assert _extract_code_from_text("123456", "123456") is True
+
+def test_extract_with_at_mention():
+    assert _extract_code_from_text("@mybot 123456", "123456") is True
+
+def test_extract_at_mention_after():
+    assert _extract_code_from_text("123456 @mybot", "123456") is True
+
+def test_extract_at_mention_newline():
+    assert _extract_code_from_text("@mybot\n123456", "123456") is True
+
+def test_extract_bind_command():
+    assert _extract_code_from_text("/bind 123456", "123456") is True
+
+def test_extract_start_command():
+    assert _extract_code_from_text("/start 123456", "123456") is True
+
+def test_extract_wrong_code():
+    assert _extract_code_from_text("654321", "123456") is False
+
+def test_extract_partial():
+    assert _extract_code_from_text("my code is 123456 ok", "123456") is False
+
+def test_extract_with_spaces():
+    assert _extract_code_from_text("  123456  ", "123456") is True
+
+def test_extract_at_only():
+    assert _extract_code_from_text("@mybot", "123456") is False

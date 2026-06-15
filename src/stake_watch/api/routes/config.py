@@ -168,6 +168,22 @@ def _cancel_bind():
     _bind_state.clear()
 
 
+import re
+
+def _extract_code_from_text(text: str, code: str) -> bool:
+    """Match verification code in various message formats:
+    - "123456" (direct)
+    - "@botname 123456"
+    - "/bind 123456"
+    - "/start 123456"
+    - "123456 @botname"
+    - "@botname\n123456"
+    """
+    cleaned = re.sub(r'@\S+', '', text).strip()
+    cleaned = re.sub(r'^/(bind|start|verify)\s*', '', cleaned).strip()
+    return cleaned == code
+
+
 async def _poll_for_code(bot_token: str, code: str, store: ConfigStore):
     try:
         from telegram import Bot
@@ -180,14 +196,24 @@ async def _poll_for_code(bot_token: str, code: str, store: ConfigStore):
                 for update in updates:
                     offset = update.update_id + 1
                     msg = update.message
-                    if msg and msg.text and msg.text.strip() == code:
+                    if not msg or not msg.text:
+                        continue
+                    if _extract_code_from_text(msg.text, code):
                         chat_id = str(msg.chat_id)
+                        chat_type = msg.chat.type if msg.chat else "private"
+                        chat_title = msg.chat.title if msg.chat and msg.chat.title else "私聊"
                         await store.set_setting("telegram.chat_id", chat_id)
                         _bind_state["chat_id"] = chat_id
                         _bind_state["status"] = "bound"
                         await bot.send_message(
                             chat_id=chat_id,
-                            text=f"Stake Watch 绑定成功\n\nChat ID: {chat_id}\n验证码: {code}"
+                            text=(
+                                f"Stake Watch 绑定成功\n\n"
+                                f"Chat ID: {chat_id}\n"
+                                f"聊天类型: {chat_type} ({chat_title})\n"
+                                f"验证码: {code}\n\n"
+                                f"后续告警将推送到此{'群组' if 'group' in chat_type else '对话'}"
+                            )
                         )
                         return
             except Exception:
