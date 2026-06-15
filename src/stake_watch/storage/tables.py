@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Index, Numeric, String, Float, Text
+from sqlalchemy import Boolean, DateTime, Index, Numeric, String, Float, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -44,3 +44,45 @@ class ProtocolStatsRow(Base):
     __table_args__ = (
         Index("ix_protocol_stats_protocol", "protocol", unique=True),
     )
+
+
+class WalletRow(Base):
+    __tablename__ = "wallets"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    chain: Mapped[str] = mapped_column(String(20))
+    address: Mapped[str] = mapped_column(String(100))
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class RpcEndpointRow(Base):
+    __tablename__ = "rpc_endpoints"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    chain: Mapped[str] = mapped_column(String(20), unique=True)
+    primary_url: Mapped[str] = mapped_column(String(500))
+    fallback_urls: Mapped[str] = mapped_column(Text, default="[]")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ProtocolConfigRow(Base):
+    __tablename__ = "protocol_configs"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    chain: Mapped[str] = mapped_column(String(20))
+    collector: Mapped[str] = mapped_column(String(100))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    safety_rank: Mapped[int | None] = mapped_column(nullable=True)
+    safety_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reference_apy: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    primary_risks: Mapped[str] = mapped_column(Text, default="[]")
+    vault_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    defillama_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AppSettingsRow(Base):
+    __tablename__ = "app_settings"
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
