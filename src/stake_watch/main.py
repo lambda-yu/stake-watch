@@ -5,31 +5,12 @@ from pathlib import Path
 import uvicorn
 from stake_watch.api.app import create_app
 from stake_watch.collectors.base import BaseCollector
-from stake_watch.collectors.defillama import DefiLlamaCollector
-from stake_watch.config import AppSettings, ProtocolEntry, load_protocols, load_settings
-from stake_watch.models.common import Chain
+from stake_watch.collectors.registry import build_collector
+from stake_watch.config import load_protocols, load_settings
 from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
 from stake_watch.storage.db import Storage
 
 logger = logging.getLogger(__name__)
-
-DEFILLAMA_CHAIN_MAP = {"base": "Base", "ethereum": "Ethereum", "bsc": "BSC", "solana": "Solana"}
-DEFILLAMA_SLUG_MAP = {
-    "aave_v3_base": "aave-v3", "morpho_steakhouse_usdc": "morpho-blue",
-    "morpho_gauntlet_usdc_prime": "morpho-blue", "morpho_pangolins_usdc": "morpho-blue",
-    "morpho_gauntlet_frontier_usdc": "morpho-blue", "jupiter_lend": "jupiter-lend",
-    "kamino_usdc": "kamino-lend", "compound_v3_usdc": "compound-v3",
-    "fluid_usdc": "fluid-lending", "sky_susds": "sky", "venus_usdc": "venus-core-pool",
-}
-
-def _build_collector(entry: ProtocolEntry) -> BaseCollector | None:
-    chain = Chain(entry.chain)
-    slug = entry.defillama_slug or DEFILLAMA_SLUG_MAP.get(entry.name)
-    if slug:
-        return DefiLlamaCollector(chain=chain, protocol=entry.name, defillama_slug=slug,
-            chain_filter=DEFILLAMA_CHAIN_MAP.get(entry.chain, entry.chain))
-    logger.warning(f"No collector mapping for {entry.name}, skipping")
-    return None
 
 async def build_app(settings_path=None, protocols_path=None, local_settings_path=None):
     settings_path = settings_path or Path("config/settings.yaml")
@@ -42,11 +23,12 @@ async def build_app(settings_path=None, protocols_path=None, local_settings_path
         db_url = db_url.replace("sqlite://", "sqlite+aiosqlite://", 1)
     storage = Storage(db_url)
     await storage.initialize()
-    collectors = []
+    rpc_urls = {chain: ep.primary for chain, ep in settings.rpc.items()}
+    collectors: list[BaseCollector] = []
     for entry in protocols:
         if not entry.enabled:
             continue
-        collector = _build_collector(entry)
+        collector = build_collector(entry, rpc_urls=rpc_urls)
         if collector:
             collectors.append(collector)
     wallets = [w.address for w in settings.wallets]

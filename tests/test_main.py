@@ -22,6 +22,7 @@ protocols:
   - name: aave_v3_base
     chain: base
     collector: defillama
+    defillama_slug: aave-v3
     enabled: true
 """)
     runner, storage, settings = await build_app(settings_path=settings_yaml, protocols_path=protocols_yaml)

@@ -28,25 +28,93 @@ risk:
 protocols:
   - name: aave_v3_base
     chain: base
-    collector: defillama
+    collector: aave_v3
     defillama_slug: aave-v3
     safety_rank: 1
     safety_score: 8.8
     primary_risks: ["shared pool bad debt", "utilization", "Base L2 risk"]
     enabled: true
+
+  - name: sky_susds
+    chain: ethereum
+    collector: sky_susds
+    defillama_slug: sky
+    safety_rank: 2
+    safety_score: 8.5
+    primary_risks: ["USDC-to-USDS conversion", "governance", "RWA exposure"]
+    enabled: true
+
   - name: morpho_steakhouse_usdc
     chain: base
-    collector: defillama
+    collector: morpho
+    vault_address: "0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2"
     defillama_slug: morpho-blue
     safety_rank: 3
     safety_score: 8.3
     primary_risks: ["curator risk", "underlying market bad debt"]
     enabled: true
+
+  - name: morpho_gauntlet_usdc_prime
+    chain: base
+    collector: morpho
+    vault_address: "0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61"
+    defillama_slug: morpho-blue
+    safety_rank: 4
+    safety_score: 8.2
+    primary_risks: ["curator risk", "oracle", "market allocation"]
+    enabled: true
+
+  - name: compound_v3_usdc
+    chain: base
+    collector: compound_v3
+    defillama_slug: compound-v3
+    safety_rank: 5
+    safety_score: 8.1
+    primary_risks: ["single collateral market risk", "utilization"]
+    enabled: true
+
+  - name: fluid_usdc
+    chain: ethereum
+    collector: defillama
+    defillama_slug: fluid-lending
+    safety_rank: 6
+    safety_score: 7.8
+    primary_risks: ["complex contract system", "utilization"]
+    enabled: true
+
+  - name: morpho_pangolins_usdc
+    chain: base
+    collector: morpho
+    vault_address: "0x1401d1271C47648AC70cBcdfA3776D4A87CE006B"
+    defillama_slug: morpho-blue
+    safety_rank: 7
+    safety_score: 7.5
+    primary_risks: ["Pangolins management capability", "rebalancing"]
+    enabled: true
+
+  - name: morpho_gauntlet_frontier_usdc
+    chain: ethereum
+    collector: defillama
+    defillama_slug: morpho-blue
+    safety_rank: 8
+    safety_score: 7.4
+    primary_risks: ["broader collateral acceptance for yield"]
+    enabled: true
+
   - name: jupiter_lend
     chain: solana
     collector: defillama
     defillama_slug: jupiter-lend
     safety_rank: 9
     safety_score: 7.2
-    primary_risks: ["newer protocol", "unified liquidity"]
+    primary_risks: ["newer protocol", "unified liquidity", "withdrawal smoothing"]
+    enabled: true
+
+  - name: kamino_usdc
+    chain: solana
+    collector: kamino
+    defillama_slug: kamino-lend
+    safety_rank: 10
+    safety_score: 7.2
+    primary_risks: ["Solana risk", "oracle", "liquidation", "market parameters"]
     enabled: true
