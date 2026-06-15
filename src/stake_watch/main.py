@@ -64,12 +64,19 @@ async def main():
         f"{len(runner.wallets)} wallets"
     )
 
-    await scheduled.trigger_now()
     scheduled.start()
 
     import uvicorn
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
+
+    async def initial_collection():
+        await asyncio.sleep(1)
+        logger.info("Running initial collection...")
+        await scheduled.trigger_now()
+
+    asyncio.create_task(initial_collection())
+
     try:
         await server.serve()
     finally:
