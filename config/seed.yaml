@@ -1,0 +1,52 @@
+wallets: []
+
+rpc:
+  base:
+    primary: "https://mainnet.base.org"
+  ethereum:
+    primary: "https://eth.public-rpc.com"
+  solana:
+    primary: "https://api.mainnet-beta.solana.com"
+  bsc:
+    primary: "https://bsc-dataseed.binance.org"
+
+intervals:
+  positions: 300
+  protocol_stats: 900
+  stablecoin_price: 60
+  stablecoin_supply: 600
+  reserves: 21600
+
+risk:
+  liquidation_warning: 1.3
+  liquidation_critical: 1.1
+  depeg_warning: 0.005
+  depeg_critical: 0.02
+  tvl_crash_threshold: 0.15
+  apy_change_threshold: 0.30
+
+protocols:
+  - name: aave_v3_base
+    chain: base
+    collector: defillama
+    defillama_slug: aave-v3
+    safety_rank: 1
+    safety_score: 8.8
+    primary_risks: ["shared pool bad debt", "utilization", "Base L2 risk"]
+    enabled: true
+  - name: morpho_steakhouse_usdc
+    chain: base
+    collector: defillama
+    defillama_slug: morpho-blue
+    safety_rank: 3
+    safety_score: 8.3
+    primary_risks: ["curator risk", "underlying market bad debt"]
+    enabled: true
+  - name: jupiter_lend
+    chain: solana
+    collector: defillama
+    defillama_slug: jupiter-lend
+    safety_rank: 9
+    safety_score: 7.2
+    primary_risks: ["newer protocol", "unified liquidity"]
+    enabled: true
