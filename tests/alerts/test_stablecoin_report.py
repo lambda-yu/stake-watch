@@ -36,6 +36,7 @@ def test_format_with_data():
     assert "+0.67%" in text
     assert "-3.50%" in text
     assert "0.350%" in text  # CEX spread
+    assert "采集:" in text  # Collection timestamp
 
 
 def test_format_hard_trigger():

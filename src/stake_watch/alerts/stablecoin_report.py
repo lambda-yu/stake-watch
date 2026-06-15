@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from stake_watch.alerts.timezone import now_display
+from stake_watch.alerts.timezone import now_display, format_time
 from stake_watch.storage.db import Storage
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,9 @@ def format_stablecoin_report(snapshots: list, tz_offset: int = 8) -> str:
 
         if hasattr(s, 'hard_trigger') and s.hard_trigger:
             lines.append(f"  ⚠️ 硬触发: {s.hard_trigger}")
+
+        if hasattr(s, 'updated_at') and s.updated_at:
+            lines.append(f"  采集: {format_time(s.updated_at, tz_offset)}")
 
     lines.append("\n━━━━━━━━━━━━━━━━━━━━━━")
     return "\n".join(lines)

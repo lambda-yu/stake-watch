@@ -120,6 +120,12 @@ export function Stablecoins() {
                       硬触发: {snap.hard_trigger}
                     </div>
                   )}
+                  <div className="mt-2 pt-2 border-t border-white/10 flex justify-between">
+                    <span className="opacity-50 text-xs">采集时间</span>
+                    <span className="text-xs opacity-50 font-mono">
+                      {snap.updated_at ? new Date(snap.updated_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '-'}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm opacity-50">暂无数据，等待首次采集</p>
