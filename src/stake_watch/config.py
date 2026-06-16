@@ -52,6 +52,7 @@ class ProtocolEntry(BaseModel):
     primary_risks: list[str] = []
     vault_address: str | None = None
     defillama_slug: str | None = None
+    pool_filter: str | None = None
 
 def _deep_merge(base: dict, override: dict) -> dict:
     result = base.copy()

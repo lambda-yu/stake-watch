@@ -48,7 +48,8 @@ def build_collector(entry: ProtocolEntry, rpc_urls: dict[str, str]) -> BaseColle
             logger.warning(f"{entry.name}: defillama requires defillama_slug")
             return None
         return DefiLlamaCollector(chain=chain, protocol=entry.name, defillama_slug=slug,
-            chain_filter=DEFILLAMA_CHAIN_MAP.get(entry.chain, entry.chain))
+            chain_filter=DEFILLAMA_CHAIN_MAP.get(entry.chain, entry.chain),
+            pool_filter=entry.pool_filter)
 
     logger.warning(f"Unknown collector type '{ct}' for {entry.name}")
     return None

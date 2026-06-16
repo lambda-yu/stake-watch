@@ -58,13 +58,15 @@ class ConfigStore:
     async def add_protocol(self, name: str, chain: str, collector: str, enabled: bool = True,
                            safety_rank: int | None = None, safety_score: float | None = None,
                            reference_apy: str | None = None, primary_risks: list[str] | None = None,
-                           vault_address: str | None = None, defillama_slug: str | None = None) -> ProtocolConfigRow:
+                           vault_address: str | None = None, defillama_slug: str | None = None,
+                           pool_filter: str | None = None) -> ProtocolConfigRow:
         async with self._sf() as s:
             now = datetime.now(timezone.utc)
             row = ProtocolConfigRow(name=name, chain=chain, collector=collector, enabled=enabled,
                 safety_rank=safety_rank, safety_score=safety_score, reference_apy=reference_apy,
                 primary_risks=json.dumps(primary_risks or []),
                 vault_address=vault_address, defillama_slug=defillama_slug,
+                pool_filter=pool_filter,
                 created_at=now, updated_at=now)
             s.add(row)
             await s.commit()
@@ -153,7 +155,8 @@ class ConfigStore:
                 reference_apy=proto.get("reference_apy"),
                 primary_risks=proto.get("primary_risks", []),
                 vault_address=proto.get("vault_address"),
-                defillama_slug=proto.get("defillama_slug"))
+                defillama_slug=proto.get("defillama_slug"),
+                pool_filter=proto.get("pool_filter"))
 
         # Import wallets
         for wallet in data.get("wallets", []):
@@ -172,7 +175,8 @@ class ConfigStore:
             safety_rank=r.safety_rank, safety_score=r.safety_score,
             reference_apy=r.reference_apy,
             primary_risks=json.loads(r.primary_risks) if r.primary_risks else [],
-            vault_address=r.vault_address, defillama_slug=r.defillama_slug
+            vault_address=r.vault_address, defillama_slug=r.defillama_slug,
+            pool_filter=getattr(r, "pool_filter", None),
         ) for r in rows]
 
     async def load_app_settings(self) -> AppSettings:

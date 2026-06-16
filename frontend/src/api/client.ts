@@ -26,6 +26,7 @@ export const api = {
       request<any>(`/protocols/${id}/toggle`, { method: 'PATCH' }),
     delete: (id: number) =>
       request<void>(`/protocols/${id}`, { method: 'DELETE' }),
+    refresh: () => request<any>('/protocols/refresh', { method: 'POST' }),
   },
   intervals: {
     get: () => request<any>('/config/intervals'),

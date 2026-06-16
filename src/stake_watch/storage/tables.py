@@ -77,6 +77,7 @@ class ProtocolConfigRow(Base):
     primary_risks: Mapped[str] = mapped_column(Text, default="[]")
     vault_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
     defillama_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    pool_filter: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 

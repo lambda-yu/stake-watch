@@ -21,6 +21,12 @@ class Storage:
     async def initialize(self):
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Lightweight migration: add pool_filter column if missing
+            try:
+                from sqlalchemy import text
+                await conn.execute(text("ALTER TABLE protocol_configs ADD COLUMN pool_filter VARCHAR(100)"))
+            except Exception:
+                pass
 
     async def close(self):
         await self._engine.dispose()

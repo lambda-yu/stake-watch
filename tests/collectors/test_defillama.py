@@ -41,4 +41,6 @@ async def test_chain_filter_applied(collector):
     with patch("httpx.AsyncClient.get", new=fake_get):
         stats = await collector.collect_protocol_stats()
     assert stats.chain == Chain.BASE
-    assert len(stats.pools) == 2  # Ethereum pool filtered out
+    # Ethereum filtered out by chain. USDC auto-preferred from Base pools.
+    assert len(stats.pools) == 1
+    assert stats.pools[0].asset == "USDC"

@@ -8,6 +8,8 @@ export function Protocols() {
   const [protocols, setProtocols] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', chain: 'base', collector: 'defillama', defillama_slug: '', safety_score: '' });
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<any>(null);
 
   const reload = async () => { try { setProtocols(await api.protocols.list()); } catch {} };
   useEffect(() => { reload(); }, []);
@@ -22,6 +24,20 @@ export function Protocols() {
     reload();
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const r = await api.protocols.refresh();
+      setRefreshResult(r);
+      await reload();
+    } catch (e: any) {
+      setRefreshResult({ failed: [{ name: 'all', reason: e.message }] });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-4">
@@ -29,11 +45,34 @@ export function Protocols() {
           <h1 className="text-2xl font-bold">质押协议</h1>
           <p className="text-gray-500 text-sm mt-1">管理链上借贷和质押协议的监控配置</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
-          {showForm ? '取消' : '添加协议'}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={handleRefresh} disabled={refreshing}
+            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-700 text-white px-4 py-2 rounded text-sm">
+            {refreshing ? '刷新中...' : '刷新 APY+TVL'}
+          </button>
+          <button onClick={() => setShowForm(!showForm)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm">
+            {showForm ? '取消' : '添加协议'}
+          </button>
+        </div>
       </div>
+
+      {refreshResult && (
+        <div className="mb-4 bg-gray-900 rounded-lg p-3 text-xs">
+          {refreshResult.refreshed?.length > 0 && (
+            <div className="text-green-400 mb-1">
+              ✓ 成功刷新 {refreshResult.refreshed.length} 个协议
+            </div>
+          )}
+          {refreshResult.failed?.length > 0 && (
+            <div className="text-red-400 space-y-0.5">
+              {refreshResult.failed.map((f: any, i: number) => (
+                <div key={i}>✗ {f.name}: {f.reason}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={handleAdd} className="bg-gray-900 rounded-lg p-4 mb-4 grid grid-cols-2 gap-3">
