@@ -34,7 +34,8 @@ async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
         tvl = float(stats.tvl_usd)
         usdc_pool = next((p for p in stats.pools if "USDC" in p.asset.upper()), None)
         usdt_pool = next((p for p in stats.pools if "USDT" in p.asset.upper()), None)
-        default_pool = usdc_pool or usdt_pool or stats.pools[0]
+        susds_pool = next((p for p in stats.pools if "SUSDS" in p.asset.upper() or "USDS" in p.asset.upper()), None)
+        default_pool = usdc_pool or usdt_pool or susds_pool or stats.pools[0]
         protocol_dict["live_tvl_usd"] = tvl
         protocol_dict["live_apy"] = default_pool.supply_apy
         protocol_dict["live_pool_asset"] = default_pool.asset
@@ -43,6 +44,10 @@ async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
         protocol_dict["usdc_tvl"] = float(usdc_pool.total_supply) if usdc_pool else None
         protocol_dict["usdt_apy"] = usdt_pool.supply_apy if usdt_pool else None
         protocol_dict["usdt_tvl"] = float(usdt_pool.total_supply) if usdt_pool else None
+        if susds_pool and not usdc_pool and not usdt_pool:
+            protocol_dict["primary_asset"] = susds_pool.asset
+            protocol_dict["primary_asset_apy"] = susds_pool.supply_apy
+            protocol_dict["primary_asset_tvl"] = float(susds_pool.total_supply)
     else:
         protocol_dict["live_tvl_usd"] = None
         protocol_dict["live_apy"] = None
@@ -81,6 +86,10 @@ async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None =
             asset = "USDC"
         elif "USDT" in symbol:
             asset = "USDT"
+        elif "SUSDS" in symbol or "USDS" in symbol:
+            asset = "USDS"
+        elif "DAI" in symbol:
+            asset = "DAI"
         if not pool_filter and not asset:
             continue
         by_chain_asset.setdefault((chain, asset or "Other"), []).append(p)
@@ -193,8 +202,9 @@ async def refresh_all_protocols(
     POOL_FILTER_MAP = {
         "morpho_steakhouse_usdc": "STEAKUSDC",
         "morpho_gauntlet_usdc_prime": "GTUSDCP",
-        "morpho_pangolins_usdc": "PANGUSDC",
+        "morpho_pangolins_usdc": "PUSDC",
         "morpho_gauntlet_frontier_usdc": "GTUSDC",
+        "sky_susds": "SUSDS",
     }
 
     refreshed = []

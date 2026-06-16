@@ -37,8 +37,8 @@ class DefiLlamaCollector(BaseCollector):
                 or f == (p.get("pool") or "").lower()]
         else:
             stable_filtered = [p for p in filtered
-                if "USDC" in (p.get("symbol") or "").upper()
-                or "USDT" in (p.get("symbol") or "").upper()]
+                if any(s in (p.get("symbol") or "").upper()
+                    for s in ("USDC", "USDT", "USDS", "DAI", "FRAX", "USDE"))]
             if stable_filtered:
                 filtered = stable_filtered
 

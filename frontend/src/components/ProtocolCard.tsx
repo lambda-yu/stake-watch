@@ -20,6 +20,9 @@ type Protocol = {
   usdc_tvl?: number | null;
   usdt_apy?: number | null;
   usdt_tvl?: number | null;
+  primary_asset?: string | null;
+  primary_asset_apy?: number | null;
+  primary_asset_tvl?: number | null;
   defillama_slug?: string | null;
   vault_address?: string | null;
 };
@@ -110,7 +113,7 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
         </div>
       </div>
 
-      {(p.usdc_apy != null || p.usdt_apy != null) && (
+      {(p.usdc_apy != null || p.usdt_apy != null || p.primary_asset_apy != null) && (
         <div className="mt-3 pt-3 border-t border-gray-800">
           <div className="grid grid-cols-2 gap-3">
             {p.usdc_apy != null && (
@@ -137,6 +140,19 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
                     {p.usdt_apy.toFixed(2)}%
                   </span>
                   {p.usdt_tvl && <span className="font-mono text-xs text-gray-400">{formatTvl(p.usdt_tvl)}</span>}
+                </div>
+              </div>
+            )}
+            {p.usdc_apy == null && p.usdt_apy == null && p.primary_asset && (
+              <div className="bg-gray-800/40 rounded p-2.5 col-span-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs bg-orange-900/60 text-orange-300 px-1.5 py-0.5 rounded font-semibold">{p.primary_asset}</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-1">
+                  <span className={`font-mono text-base ${(p.primary_asset_apy || 0) > 5 ? 'text-green-400' : 'text-gray-200'}`}>
+                    {p.primary_asset_apy?.toFixed(2)}%
+                  </span>
+                  {p.primary_asset_tvl && <span className="font-mono text-xs text-gray-400">{formatTvl(p.primary_asset_tvl)}</span>}
                 </div>
               </div>
             )}
