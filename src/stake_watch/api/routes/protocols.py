@@ -43,6 +43,52 @@ async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
     return protocol_dict
 
 
+MONITORED_CHAINS = ["Ethereum", "Base", "Solana", "BSC"]
+CHAIN_DISPLAY = {"Ethereum": "ETH", "Base": "BASE", "Solana": "SOL", "BSC": "BSC"}
+
+
+async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None = None) -> list[dict]:
+    """Fetch USDC pool data across all monitored chains for a given slug."""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get("https://yields.llama.fi/pools")
+            resp.raise_for_status()
+            data = resp.json().get("data", [])
+    except Exception:
+        return []
+
+    by_chain: dict[str, list[dict]] = {}
+    for p in data:
+        if p.get("project") != defillama_slug:
+            continue
+        chain = p.get("chain", "")
+        if chain not in MONITORED_CHAINS:
+            continue
+        symbol = (p.get("symbol") or "").upper()
+        if pool_filter and pool_filter.upper() not in symbol:
+            continue
+        if not pool_filter and "USDC" not in symbol and "USD" not in symbol:
+            continue
+        by_chain.setdefault(chain, []).append(p)
+
+    result = []
+    for chain, pools in by_chain.items():
+        tvl = sum(float(p.get("tvlUsd", 0) or 0) for p in pools)
+        apys = [p.get("apy", 0) or 0 for p in pools if p.get("apy")]
+        avg_apy = sum(apys) / len(apys) if apys else 0
+        result.append({
+            "chain": CHAIN_DISPLAY.get(chain, chain),
+            "chain_full": chain,
+            "tvl_usd": tvl,
+            "apy": avg_apy,
+            "pools": len(pools),
+        })
+
+    result.sort(key=lambda x: -x["tvl_usd"])
+    return result
+
+
 @router.get("")
 async def list_protocols(store: ConfigStore = Depends(get_config_store),
                           storage: Storage = Depends(get_storage)):
@@ -51,8 +97,27 @@ async def list_protocols(store: ConfigStore = Depends(get_config_store),
     for p in protos:
         d = _to_dict(p)
         d = await _enrich_with_stats(d, storage)
+        chains_data = await store.get_setting(f"protocols.{p.name}.chains")
+        if chains_data:
+            d["chains_breakdown"] = chains_data
         enriched.append(d)
     return enriched
+
+
+@router.get("/{protocol_id}/chains")
+async def get_protocol_chains(protocol_id: int,
+                                store: ConfigStore = Depends(get_config_store)):
+    """Fetch and return live multi-chain breakdown for a protocol."""
+    p = await store.get_protocol(protocol_id)
+    if not p:
+        return {"error": "not found"}
+    slug = p.defillama_slug
+    if not slug:
+        return {"chains": []}
+    pool_filter = getattr(p, "pool_filter", None)
+    chains = await _fetch_multi_chain_data(slug, pool_filter)
+    await store.set_setting(f"protocols.{p.name}.chains", chains)
+    return {"chains": chains, "protocol": p.name}
 
 @router.post("", status_code=201)
 async def add_protocol(data: ProtocolCreate, store: ConfigStore = Depends(get_config_store)):
@@ -125,12 +190,18 @@ async def refresh_all_protocols(
             stats = await collector.collect_protocol_stats()
             await storage.save_protocol_stats(stats)
             usdc_pool = next((pp for pp in stats.pools if "USDC" in pp.asset.upper() or "USD" in pp.asset.upper()), stats.pools[0] if stats.pools else None)
+
+            chains = await _fetch_multi_chain_data(slug, pool_filter)
+            if chains:
+                await store.set_setting(f"protocols.{p.name}.chains", chains)
+
             refreshed.append({
                 "name": p.name,
                 "tvl_usd": float(stats.tvl_usd),
                 "apy": usdc_pool.supply_apy if usdc_pool else 0,
                 "asset": usdc_pool.asset if usdc_pool else "",
                 "pools": len(stats.pools),
+                "chains": len(chains),
             })
         except Exception as e:
             failed.append({"name": p.name, "reason": str(e)})

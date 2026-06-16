@@ -1,3 +1,11 @@
+type ChainBreakdown = {
+  chain: string;
+  chain_full: string;
+  tvl_usd: number;
+  apy: number;
+  pools: number;
+};
+
 type Protocol = {
   id: number; name: string; chain: string; collector: string;
   enabled: boolean; safety_score: number | null; reference_apy: string | null;
@@ -6,6 +14,7 @@ type Protocol = {
   live_apy?: number | null;
   live_pool_asset?: string | null;
   stats_updated_at?: string | null;
+  chains_breakdown?: ChainBreakdown[] | null;
 };
 type Props = { protocol: Protocol; onToggle: (id: number) => void; onDelete: (id: number) => void };
 
@@ -16,8 +25,17 @@ function formatTvl(v: number): string {
   return `$${v.toFixed(0)}`;
 }
 
+const CHAIN_COLORS: Record<string, string> = {
+  ETH: 'bg-blue-900/50 text-blue-300',
+  BASE: 'bg-blue-800/50 text-blue-200',
+  SOL: 'bg-purple-900/50 text-purple-300',
+  BSC: 'bg-yellow-900/50 text-yellow-300',
+};
+
 export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
   const hasLive = p.live_tvl_usd != null || p.live_apy != null;
+  const hasMultiChain = p.chains_breakdown && p.chains_breakdown.length > 1;
+
   return (
     <div className={`bg-gray-900 rounded-lg p-4 border ${p.enabled ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}>
       <div className="flex justify-between items-start">
@@ -68,6 +86,29 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
               {new Date(p.stats_updated_at).toLocaleString('zh-CN', { hour12: false })}
             </div>
           )}
+        </div>
+      )}
+
+      {hasMultiChain && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <div className="text-xs text-gray-500 mb-2">多链部署 ({p.chains_breakdown!.length} 条链)</div>
+          <div className="grid grid-cols-2 gap-2">
+            {p.chains_breakdown!.map(c => (
+              <div key={c.chain_full} className="bg-gray-800/50 rounded px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${CHAIN_COLORS[c.chain] || 'bg-gray-700 text-gray-300'}`}>
+                    {c.chain}
+                  </span>
+                </div>
+                <div className="flex gap-3 text-xs">
+                  <span className={`font-mono ${c.apy > 5 ? 'text-green-400' : 'text-gray-300'}`}>
+                    {c.apy.toFixed(2)}%
+                  </span>
+                  <span className="font-mono text-gray-400">{formatTvl(c.tvl_usd)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
