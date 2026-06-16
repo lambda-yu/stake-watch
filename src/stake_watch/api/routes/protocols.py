@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from stake_watch.api.deps import get_config_store, get_storage
