@@ -36,9 +36,11 @@ class DefiLlamaCollector(BaseCollector):
                 or f in (p.get("poolMeta") or "").upper()
                 or f == (p.get("pool") or "").lower()]
         else:
-            usdc_filtered = [p for p in filtered if "USDC" in (p.get("symbol") or "").upper()]
-            if usdc_filtered:
-                filtered = usdc_filtered
+            stable_filtered = [p for p in filtered
+                if "USDC" in (p.get("symbol") or "").upper()
+                or "USDT" in (p.get("symbol") or "").upper()]
+            if stable_filtered:
+                filtered = stable_filtered
 
         pools = []
         total_tvl = Decimal("0")

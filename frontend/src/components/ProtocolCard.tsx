@@ -4,6 +4,7 @@ type ChainBreakdown = {
   tvl_usd: number;
   apy: number;
   pools: number;
+  by_asset?: Record<string, { tvl_usd: number; apy: number; pools: number }>;
 };
 
 type Protocol = {
@@ -15,6 +16,10 @@ type Protocol = {
   live_pool_asset?: string | null;
   stats_updated_at?: string | null;
   chains_breakdown?: ChainBreakdown[] | null;
+  usdc_apy?: number | null;
+  usdc_tvl?: number | null;
+  usdt_apy?: number | null;
+  usdt_tvl?: number | null;
   defillama_slug?: string | null;
   vault_address?: string | null;
 };
@@ -57,7 +62,6 @@ function getLinks(p: Protocol) {
 }
 
 export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
-  const hasLive = p.live_tvl_usd != null || p.live_apy != null;
   const hasMultiChain = p.chains_breakdown && p.chains_breakdown.length > 1;
   const links = getLinks(p);
 
@@ -106,31 +110,40 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
         </div>
       </div>
 
-      {hasLive && (
-        <div className="mt-3 pt-3 border-t border-gray-800 flex items-center gap-6 text-sm">
-          {p.live_apy != null && (
-            <div className="flex items-baseline gap-1">
-              <span className="text-gray-500 text-xs">APY</span>
-              <span className={`font-mono text-base ${p.live_apy > 5 ? 'text-green-400' : 'text-gray-200'}`}>
-                {p.live_apy.toFixed(2)}%
-              </span>
-            </div>
-          )}
-          {p.live_tvl_usd != null && (
-            <div className="flex items-baseline gap-1">
-              <span className="text-gray-500 text-xs">质押量</span>
-              <span className="font-mono text-base text-gray-200">{formatTvl(p.live_tvl_usd)}</span>
-            </div>
-          )}
-          {p.live_pool_asset && (
-            <div className="flex items-baseline gap-1">
-              <span className="text-gray-500 text-xs">资产</span>
-              <span className="text-xs">{p.live_pool_asset}</span>
-            </div>
-          )}
+      {(p.usdc_apy != null || p.usdt_apy != null) && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <div className="grid grid-cols-2 gap-3">
+            {p.usdc_apy != null && (
+              <div className="bg-gray-800/40 rounded p-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs bg-blue-900/60 text-blue-300 px-1.5 py-0.5 rounded font-semibold">USDC</span>
+                  {p.usdt_apy == null && <span className="text-xs text-gray-500">仅 USDC</span>}
+                </div>
+                <div className="flex items-baseline gap-3 mt-1">
+                  <span className={`font-mono text-base ${p.usdc_apy > 5 ? 'text-green-400' : 'text-gray-200'}`}>
+                    {p.usdc_apy.toFixed(2)}%
+                  </span>
+                  {p.usdc_tvl && <span className="font-mono text-xs text-gray-400">{formatTvl(p.usdc_tvl)}</span>}
+                </div>
+              </div>
+            )}
+            {p.usdt_apy != null && (
+              <div className="bg-gray-800/40 rounded p-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs bg-green-900/60 text-green-300 px-1.5 py-0.5 rounded font-semibold">USDT</span>
+                </div>
+                <div className="flex items-baseline gap-3 mt-1">
+                  <span className={`font-mono text-base ${p.usdt_apy > 5 ? 'text-green-400' : 'text-gray-200'}`}>
+                    {p.usdt_apy.toFixed(2)}%
+                  </span>
+                  {p.usdt_tvl && <span className="font-mono text-xs text-gray-400">{formatTvl(p.usdt_tvl)}</span>}
+                </div>
+              </div>
+            )}
+          </div>
           {p.stats_updated_at && (
-            <div className="ml-auto text-xs text-gray-600">
-              {new Date(p.stats_updated_at).toLocaleString('zh-CN', { hour12: false })}
+            <div className="text-xs text-gray-600 mt-2 text-right">
+              更新 {new Date(p.stats_updated_at).toLocaleString('zh-CN', { hour12: false })}
             </div>
           )}
         </div>
@@ -139,19 +152,39 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
       {hasMultiChain && (
         <div className="mt-3 pt-3 border-t border-gray-800">
           <div className="text-xs text-gray-500 mb-2">多链部署 ({p.chains_breakdown!.length} 条链)</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
             {p.chains_breakdown!.map(c => (
-              <div key={c.chain_full} className="bg-gray-800/50 rounded px-3 py-2 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div key={c.chain_full} className="bg-gray-800/50 rounded px-3 py-2">
+                <div className="flex items-center justify-between mb-1">
                   <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${CHAIN_COLORS[c.chain] || 'bg-gray-700 text-gray-300'}`}>
                     {c.chain}
                   </span>
+                  <span className="font-mono text-xs text-gray-400">{formatTvl(c.tvl_usd)}</span>
                 </div>
-                <div className="flex gap-3 text-xs">
-                  <span className={`font-mono ${c.apy > 5 ? 'text-green-400' : 'text-gray-300'}`}>
-                    {c.apy.toFixed(2)}%
-                  </span>
-                  <span className="font-mono text-gray-400">{formatTvl(c.tvl_usd)}</span>
+                <div className="flex gap-4 text-xs">
+                  {c.by_asset?.USDC && (
+                    <span>
+                      <span className="text-blue-400">USDC</span>{' '}
+                      <span className={`font-mono ${c.by_asset.USDC.apy > 5 ? 'text-green-400' : 'text-gray-300'}`}>
+                        {c.by_asset.USDC.apy.toFixed(2)}%
+                      </span>{' '}
+                      <span className="text-gray-500">{formatTvl(c.by_asset.USDC.tvl_usd)}</span>
+                    </span>
+                  )}
+                  {c.by_asset?.USDT && (
+                    <span>
+                      <span className="text-green-400">USDT</span>{' '}
+                      <span className={`font-mono ${c.by_asset.USDT.apy > 5 ? 'text-green-400' : 'text-gray-300'}`}>
+                        {c.by_asset.USDT.apy.toFixed(2)}%
+                      </span>{' '}
+                      <span className="text-gray-500">{formatTvl(c.by_asset.USDT.tvl_usd)}</span>
+                    </span>
+                  )}
+                  {!c.by_asset?.USDC && !c.by_asset?.USDT && (
+                    <span className={`font-mono ${c.apy > 5 ? 'text-green-400' : 'text-gray-300'}`}>
+                      {c.apy.toFixed(2)}%
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

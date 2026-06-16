@@ -32,14 +32,22 @@ async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
     stats = await storage.get_latest_protocol_stats(protocol_dict["name"])
     if stats and stats.pools:
         tvl = float(stats.tvl_usd)
-        usdc_pool = next((p for p in stats.pools if "USDC" in p.asset.upper() or "USD" in p.asset.upper()), stats.pools[0])
+        usdc_pool = next((p for p in stats.pools if "USDC" in p.asset.upper()), None)
+        usdt_pool = next((p for p in stats.pools if "USDT" in p.asset.upper()), None)
+        default_pool = usdc_pool or usdt_pool or stats.pools[0]
         protocol_dict["live_tvl_usd"] = tvl
-        protocol_dict["live_apy"] = usdc_pool.supply_apy
-        protocol_dict["live_pool_asset"] = usdc_pool.asset
+        protocol_dict["live_apy"] = default_pool.supply_apy
+        protocol_dict["live_pool_asset"] = default_pool.asset
         protocol_dict["stats_updated_at"] = stats.updated_at.isoformat()
+        protocol_dict["usdc_apy"] = usdc_pool.supply_apy if usdc_pool else None
+        protocol_dict["usdc_tvl"] = float(usdc_pool.total_supply) if usdc_pool else None
+        protocol_dict["usdt_apy"] = usdt_pool.supply_apy if usdt_pool else None
+        protocol_dict["usdt_tvl"] = float(usdt_pool.total_supply) if usdt_pool else None
     else:
         protocol_dict["live_tvl_usd"] = None
         protocol_dict["live_apy"] = None
+        protocol_dict["usdc_apy"] = None
+        protocol_dict["usdt_apy"] = None
     return protocol_dict
 
 
@@ -48,7 +56,7 @@ CHAIN_DISPLAY = {"Ethereum": "ETH", "Base": "BASE", "Solana": "SOL", "BSC": "BSC
 
 
 async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None = None) -> list[dict]:
-    """Fetch USDC pool data across all monitored chains for a given slug."""
+    """Fetch USDC + USDT pool data across all monitored chains for a given slug."""
     import httpx
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -58,7 +66,7 @@ async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None =
     except Exception:
         return []
 
-    by_chain: dict[str, list[dict]] = {}
+    by_chain_asset: dict[tuple[str, str], list[dict]] = {}
     for p in data:
         if p.get("project") != defillama_slug:
             continue
@@ -68,22 +76,43 @@ async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None =
         symbol = (p.get("symbol") or "").upper()
         if pool_filter and pool_filter.upper() not in symbol:
             continue
-        if not pool_filter and "USDC" not in symbol and "USD" not in symbol:
+        asset = None
+        if "USDC" in symbol:
+            asset = "USDC"
+        elif "USDT" in symbol:
+            asset = "USDT"
+        if not pool_filter and not asset:
             continue
-        by_chain.setdefault(chain, []).append(p)
+        by_chain_asset.setdefault((chain, asset or "Other"), []).append(p)
 
     result = []
-    for chain, pools in by_chain.items():
+    chains_seen: dict[str, dict] = {}
+    for (chain, asset), pools in by_chain_asset.items():
         tvl = sum(float(p.get("tvlUsd", 0) or 0) for p in pools)
         apys = [p.get("apy", 0) or 0 for p in pools if p.get("apy")]
         avg_apy = sum(apys) / len(apys) if apys else 0
-        result.append({
+        entry = chains_seen.setdefault(chain, {
             "chain": CHAIN_DISPLAY.get(chain, chain),
             "chain_full": chain,
-            "tvl_usd": tvl,
-            "apy": avg_apy,
-            "pools": len(pools),
+            "tvl_usd": 0,
+            "apy": 0,
+            "pools": 0,
+            "by_asset": {},
         })
+        entry["tvl_usd"] += tvl
+        entry["pools"] += len(pools)
+        entry["by_asset"][asset] = {"tvl_usd": tvl, "apy": avg_apy, "pools": len(pools)}
+
+    for entry in chains_seen.values():
+        usdc = entry["by_asset"].get("USDC")
+        usdt = entry["by_asset"].get("USDT")
+        if usdc and usdt:
+            entry["apy"] = (usdc["apy"] + usdt["apy"]) / 2
+        elif usdc:
+            entry["apy"] = usdc["apy"]
+        elif usdt:
+            entry["apy"] = usdt["apy"]
+        result.append(entry)
 
     result.sort(key=lambda x: -x["tvl_usd"])
     return result
