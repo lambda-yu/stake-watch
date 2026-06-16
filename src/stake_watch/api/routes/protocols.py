@@ -1,8 +1,9 @@
 import json
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
-from stake_watch.api.deps import get_config_store
+from stake_watch.api.deps import get_config_store, get_storage
 from stake_watch.storage.config_store import ConfigStore
+from stake_watch.storage.db import Storage
 
 router = APIRouter()
 
@@ -24,10 +25,32 @@ def _to_dict(p):
         "reference_apy": p.reference_apy, "primary_risks": json.loads(p.primary_risks) if p.primary_risks else [],
         "vault_address": p.vault_address, "defillama_slug": p.defillama_slug}
 
+
+async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
+    stats = await storage.get_latest_protocol_stats(protocol_dict["name"])
+    if stats and stats.pools:
+        tvl = float(stats.tvl_usd)
+        usdc_pool = next((p for p in stats.pools if "USDC" in p.asset.upper() or "USD" in p.asset.upper()), stats.pools[0])
+        protocol_dict["live_tvl_usd"] = tvl
+        protocol_dict["live_apy"] = usdc_pool.supply_apy
+        protocol_dict["live_pool_asset"] = usdc_pool.asset
+        protocol_dict["stats_updated_at"] = stats.updated_at.isoformat()
+    else:
+        protocol_dict["live_tvl_usd"] = None
+        protocol_dict["live_apy"] = None
+    return protocol_dict
+
+
 @router.get("")
-async def list_protocols(store: ConfigStore = Depends(get_config_store)):
+async def list_protocols(store: ConfigStore = Depends(get_config_store),
+                          storage: Storage = Depends(get_storage)):
     protos = await store.list_protocols()
-    return [_to_dict(p) for p in protos]
+    enriched = []
+    for p in protos:
+        d = _to_dict(p)
+        d = await _enrich_with_stats(d, storage)
+        enriched.append(d)
+    return enriched
 
 @router.post("", status_code=201)
 async def add_protocol(data: ProtocolCreate, store: ConfigStore = Depends(get_config_store)):
