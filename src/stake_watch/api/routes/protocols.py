@@ -214,6 +214,47 @@ async def refresh_all_protocols(
     for p in protos:
         if not p.enabled:
             continue
+
+        # Morpho vaults: use Morpho API for accurate per-vault data
+        if p.vault_address and p.chain.lower() in ("base", "ethereum"):
+            try:
+                from stake_watch.collectors.morpho.morpho_api import fetch_vault_data
+                from stake_watch.models.protocol import PoolStats, ProtocolStats
+                from datetime import datetime, timezone
+                vd = await fetch_vault_data(p.vault_address, p.chain)
+                if vd:
+                    pool = PoolStats(
+                        pool_id=p.vault_address, asset=vd["asset"],
+                        supply_apy=vd["apy"], borrow_apy=0,
+                        total_supply=Decimal(str(vd["tvl_usd"])),
+                        total_borrow=Decimal("0"), utilization=0)
+                    stats = ProtocolStats(
+                        chain=Chain(p.chain), protocol=p.name,
+                        tvl_usd=Decimal(str(vd["tvl_usd"])), pools=[pool],
+                        updated_at=datetime.now(timezone.utc))
+                    await storage.save_protocol_stats(stats)
+
+                    chain_display = CHAIN_DISPLAY.get(DEFILLAMA_CHAIN_MAP.get(p.chain, ""), p.chain.upper())
+                    chains_data = [{
+                        "chain": chain_display,
+                        "chain_full": DEFILLAMA_CHAIN_MAP.get(p.chain, p.chain),
+                        "tvl_usd": vd["tvl_usd"],
+                        "apy": vd["apy"],
+                        "pools": 1,
+                        "by_asset": {vd["asset"]: {"tvl_usd": vd["tvl_usd"], "apy": vd["apy"], "pools": 1}},
+                    }]
+                    await store.set_setting(f"protocols.{p.name}.chains", chains_data)
+
+                    refreshed.append({
+                        "name": p.name, "tvl_usd": vd["tvl_usd"],
+                        "apy": vd["apy"], "asset": vd["asset"],
+                        "pools": 1, "chains": 1, "source": "Morpho API",
+                    })
+                    continue
+            except Exception as e:
+                failed.append({"name": p.name, "reason": f"Morpho API: {e}"})
+                continue
+
         slug = p.defillama_slug or SLUG_MAP.get(p.name)
         if not slug:
             failed.append({"name": p.name, "reason": "no defillama_slug"})
