@@ -52,7 +52,7 @@ const PROTOCOL_LINKS: Record<string, { home: string; app?: string; defillama?: s
   morpho_steakhouse_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2', defillama: 'https://defillama.com/protocol/morpho-blue' },
   morpho_gauntlet_usdc_prime: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61', defillama: 'https://defillama.com/protocol/morpho-blue' },
   morpho_pangolins_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0x1401d1271C47648AC70cBcdfA3776D4A87CE006B', defillama: 'https://defillama.com/protocol/morpho-blue' },
-  morpho_gauntlet_frontier_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org', defillama: 'https://defillama.com/protocol/morpho-blue' },
+  morpho_gauntlet_rwa_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org/ethereum/vault/0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45', defillama: 'https://defillama.com/protocol/morpho-blue' },
 };
 
 function getLinks(p: Protocol) {

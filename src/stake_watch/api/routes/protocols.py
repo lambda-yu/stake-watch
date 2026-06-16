@@ -184,7 +184,7 @@ async def fix_vault_addresses(store: ConfigStore = Depends(get_config_store)):
         "morpho_steakhouse_usdc": ("0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2", "morpho"),
         "morpho_gauntlet_usdc_prime": ("0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61", "morpho"),
         "morpho_pangolins_usdc": ("0x1401d1271C47648AC70cBcdfA3776D4A87CE006B", "morpho"),
-        "morpho_gauntlet_frontier_usdc": ("0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45", "morpho"),
+        "morpho_gauntlet_rwa_usdc": ("0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45", "morpho"),
     }
     updated = []
     protos = await store.list_protocols()
@@ -220,13 +220,13 @@ async def refresh_all_protocols(
         "morpho_steakhouse_usdc": "morpho-blue",
         "morpho_gauntlet_usdc_prime": "morpho-blue",
         "morpho_pangolins_usdc": "morpho-blue",
-        "morpho_gauntlet_frontier_usdc": "morpho-blue",
+        "morpho_gauntlet_rwa_usdc": "morpho-blue",
     }
     POOL_FILTER_MAP = {
         "morpho_steakhouse_usdc": "STEAKUSDC",
         "morpho_gauntlet_usdc_prime": "GTUSDCP",
         "morpho_pangolins_usdc": "PUSDC",
-        "morpho_gauntlet_frontier_usdc": "GTUSDC",
+        "morpho_gauntlet_rwa_usdc": "GAUNTLETUSDCRWA",
         "sky_susds": "SUSDS",
     }
 
@@ -239,14 +239,19 @@ async def refresh_all_protocols(
         "morpho_steakhouse_usdc": "0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2",
         "morpho_gauntlet_usdc_prime": "0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61",
         "morpho_pangolins_usdc": "0x1401d1271C47648AC70cBcdfA3776D4A87CE006B",
-        "morpho_gauntlet_frontier_usdc": "0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45",
+        "morpho_gauntlet_rwa_usdc": "0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45",
     }
-    # Force update if vault_address is the old Frontier address (now inactive)
-    OLD_FRONTIER = "0xc582F04d8a82795aa2Ff9c8bb4c1c889fe7b754e"
+    # Auto-rename and migrate old morpho_gauntlet_frontier_usdc → morpho_gauntlet_rwa_usdc
     for p in protos:
-        if p.name in KNOWN_VAULTS:
-            if not p.vault_address or (p.name == "morpho_gauntlet_frontier_usdc" and p.vault_address.lower() == OLD_FRONTIER.lower()):
-                await store.update_protocol(p.id, vault_address=KNOWN_VAULTS[p.name])
+        if p.name == "morpho_gauntlet_frontier_usdc":
+            await store.update_protocol(p.id,
+                name="morpho_gauntlet_rwa_usdc",
+                vault_address="0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45",
+                collector="morpho",
+                primary_risks='["RWA exposure", "broader collateral acceptance for yield"]')
+    for p in protos:
+        if p.name in KNOWN_VAULTS and not p.vault_address:
+            await store.update_protocol(p.id, vault_address=KNOWN_VAULTS[p.name])
     protos = await store.list_protocols()
 
     for p in protos:

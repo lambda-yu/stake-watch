@@ -92,14 +92,14 @@ protocols:
     primary_risks: ["Pangolins management capability", "rebalancing"]
     enabled: true
 
-  - name: morpho_gauntlet_frontier_usdc
+  - name: morpho_gauntlet_rwa_usdc
     chain: ethereum
     collector: morpho
     vault_address: "0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45"
     defillama_slug: morpho-blue
     safety_rank: 8
     safety_score: 7.4
-    primary_risks: ["broader collateral acceptance for yield", "RWA exposure"]
+    primary_risks: ["RWA exposure", "broader collateral acceptance for yield"]
     enabled: true
 
   - name: jupiter_lend
