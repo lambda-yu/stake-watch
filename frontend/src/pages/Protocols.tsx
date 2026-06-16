@@ -23,7 +23,7 @@ export function Protocols() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl mx-auto">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h1 className="text-2xl font-bold">质押协议</h1>

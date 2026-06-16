@@ -105,7 +105,7 @@ export function Notifications() {
   };
 
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">推送配置</h1>
 
       <div className="bg-gray-900 rounded-lg p-6 space-y-6">

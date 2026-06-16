@@ -42,7 +42,7 @@ export function Settings() {
   const updateRisk = async (key: string, value: number) => { await api.risk.update({ [key]: value }); reload(); };
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-4xl mx-auto">
       <section>
         <h2 className="text-xl font-semibold mb-3">时区设置</h2>
         <p className="text-gray-600 text-xs mb-3">影响 Telegram 推送消息中的时间显示</p>
