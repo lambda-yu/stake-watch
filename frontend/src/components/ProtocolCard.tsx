@@ -15,6 +15,8 @@ type Protocol = {
   live_pool_asset?: string | null;
   stats_updated_at?: string | null;
   chains_breakdown?: ChainBreakdown[] | null;
+  defillama_slug?: string | null;
+  vault_address?: string | null;
 };
 type Props = { protocol: Protocol; onToggle: (id: number) => void; onDelete: (id: number) => void };
 
@@ -32,19 +34,64 @@ const CHAIN_COLORS: Record<string, string> = {
   BSC: 'bg-yellow-900/50 text-yellow-300',
 };
 
+const PROTOCOL_LINKS: Record<string, { home: string; app?: string; defillama?: string }> = {
+  aave_v3_base: { home: 'https://aave.com', app: 'https://app.aave.com', defillama: 'https://defillama.com/protocol/aave-v3' },
+  compound_v3_usdc: { home: 'https://compound.finance', app: 'https://app.compound.finance', defillama: 'https://defillama.com/protocol/compound-v3' },
+  sky_susds: { home: 'https://sky.money', app: 'https://app.sky.money', defillama: 'https://defillama.com/protocol/sky-lending' },
+  fluid_usdc: { home: 'https://fluid.io', app: 'https://fluid.io', defillama: 'https://defillama.com/protocol/fluid-lending' },
+  jupiter_lend: { home: 'https://jup.ag', app: 'https://jup.ag/lend', defillama: 'https://defillama.com/protocol/jupiter-lend' },
+  kamino_usdc: { home: 'https://kamino.finance', app: 'https://app.kamino.finance', defillama: 'https://defillama.com/protocol/kamino-lend' },
+  morpho_steakhouse_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2', defillama: 'https://defillama.com/protocol/morpho-blue' },
+  morpho_gauntlet_usdc_prime: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61', defillama: 'https://defillama.com/protocol/morpho-blue' },
+  morpho_pangolins_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org/base/vault/0x1401d1271C47648AC70cBcdfA3776D4A87CE006B', defillama: 'https://defillama.com/protocol/morpho-blue' },
+  morpho_gauntlet_frontier_usdc: { home: 'https://morpho.org', app: 'https://app.morpho.org', defillama: 'https://defillama.com/protocol/morpho-blue' },
+};
+
+function getLinks(p: Protocol) {
+  const links = PROTOCOL_LINKS[p.name];
+  if (links) return links;
+  if (p.defillama_slug) {
+    return { home: '', defillama: `https://defillama.com/protocol/${p.defillama_slug}` };
+  }
+  return null;
+}
+
 export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
   const hasLive = p.live_tvl_usd != null || p.live_apy != null;
   const hasMultiChain = p.chains_breakdown && p.chains_breakdown.length > 1;
+  const links = getLinks(p);
 
   return (
     <div className={`bg-gray-900 rounded-lg p-4 border ${p.enabled ? 'border-gray-700' : 'border-gray-800 opacity-60'}`}>
       <div className="flex justify-between items-start">
         <div className="flex-1">
           <h3 className="font-semibold">{p.name}</h3>
-          <div className="flex gap-2 mt-1 flex-wrap">
+          <div className="flex gap-2 mt-1 flex-wrap items-center">
             <span className="text-xs bg-gray-700 px-2 py-0.5 rounded">{p.chain}</span>
             {p.safety_score && <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded">安全 {p.safety_score}/10</span>}
             {p.reference_apy && <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded">参考 {p.reference_apy}</span>}
+            {links && (
+              <div className="flex gap-1 ml-1">
+                {links.app && (
+                  <a href={links.app} target="_blank" rel="noopener" title="协议应用"
+                    className="text-xs px-2 py-0.5 rounded bg-blue-900/40 text-blue-300 hover:bg-blue-900/70 inline-flex items-center gap-1">
+                    🔗 App
+                  </a>
+                )}
+                {links.home && (
+                  <a href={links.home} target="_blank" rel="noopener" title="协议主页"
+                    className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 hover:bg-gray-600">
+                    主页
+                  </a>
+                )}
+                {links.defillama && (
+                  <a href={links.defillama} target="_blank" rel="noopener" title="DefiLlama"
+                    className="text-xs px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 hover:bg-purple-900/70">
+                    🦙
+                  </a>
+                )}
+              </div>
+            )}
           </div>
           {p.primary_risks.length > 0 && (
             <div className="mt-2 text-xs text-gray-500">{p.primary_risks.join(' / ')}</div>
