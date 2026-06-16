@@ -74,7 +74,6 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete }: Props) {
         <div className="flex-1">
           <h3 className="font-semibold">{p.name}</h3>
           <div className="flex gap-2 mt-1 flex-wrap items-center">
-            <span className="text-xs bg-gray-700 px-2 py-0.5 rounded">{p.chain}</span>
             {p.safety_score && <span className="text-xs bg-green-900 text-green-300 px-2 py-0.5 rounded">安全 {p.safety_score}/10</span>}
             {p.reference_apy && <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded">参考 {p.reference_apy}</span>}
             {links && (
