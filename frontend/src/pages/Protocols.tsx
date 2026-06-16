@@ -4,12 +4,37 @@ import { ProtocolCard } from '../components/ProtocolCard';
 
 const CHAINS = ['base', 'ethereum', 'solana', 'bsc'];
 
+const GROUPS: { key: string; label: string; match: (name: string) => boolean }[] = [
+  { key: 'morpho', label: 'Morpho Vaults', match: n => n.startsWith('morpho_') },
+  { key: 'aave', label: 'Aave', match: n => n.startsWith('aave_') },
+  { key: 'compound', label: 'Compound', match: n => n.startsWith('compound_') },
+  { key: 'sky', label: 'Sky / Maker', match: n => n.startsWith('sky_') || n.startsWith('maker_') },
+  { key: 'fluid', label: 'Fluid', match: n => n.startsWith('fluid_') },
+  { key: 'jupiter', label: 'Jupiter', match: n => n.startsWith('jupiter_') },
+  { key: 'kamino', label: 'Kamino', match: n => n.startsWith('kamino_') },
+];
+
+function groupProtocols(protocols: any[]) {
+  const groups: { key: string; label: string; protocols: any[] }[] = [];
+  const unmatched: any[] = [];
+  for (const g of GROUPS) {
+    const matched = protocols.filter(p => g.match(p.name));
+    if (matched.length > 0) groups.push({ key: g.key, label: g.label, protocols: matched });
+  }
+  for (const p of protocols) {
+    if (!GROUPS.some(g => g.match(p.name))) unmatched.push(p);
+  }
+  if (unmatched.length > 0) groups.push({ key: 'other', label: '其他', protocols: unmatched });
+  return groups;
+}
+
 export function Protocols() {
   const [protocols, setProtocols] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: '', chain: 'base', collector: 'defillama', defillama_slug: '', safety_score: '' });
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState<any>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const reload = async () => { try { setProtocols(await api.protocols.list()); } catch {} };
   useEffect(() => { reload(); }, []);
@@ -37,6 +62,8 @@ export function Protocols() {
       setRefreshing(false);
     }
   };
+
+  const groups = groupProtocols(protocols);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -91,13 +118,35 @@ export function Protocols() {
         </form>
       )}
 
-      <div className="space-y-3">
-        {protocols.map(p => (
-          <ProtocolCard key={p.id} protocol={p}
-            onToggle={async (id) => { await api.protocols.toggle(id); reload(); }}
-            onDelete={async (id) => { await api.protocols.delete(id); reload(); }}
-          />
-        ))}
+      <div className="space-y-6">
+        {groups.map(g => {
+          const collapsed = collapsedGroups[g.key];
+          const enabledCount = g.protocols.filter(p => p.enabled).length;
+          return (
+            <section key={g.key}>
+              <div className="flex items-center justify-between mb-2 cursor-pointer select-none"
+                onClick={() => setCollapsedGroups({ ...collapsedGroups, [g.key]: !collapsed })}>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 text-xs">{collapsed ? '▶' : '▼'}</span>
+                  <h2 className="text-base font-semibold text-gray-300">{g.label}</h2>
+                  <span className="text-xs text-gray-500">
+                    {enabledCount}/{g.protocols.length}
+                  </span>
+                </div>
+              </div>
+              {!collapsed && (
+                <div className="space-y-3">
+                  {g.protocols.map(p => (
+                    <ProtocolCard key={p.id} protocol={p}
+                      onToggle={async (id) => { await api.protocols.toggle(id); reload(); }}
+                      onDelete={async (id) => { await api.protocols.delete(id); reload(); }}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
         {protocols.length === 0 && <p className="text-gray-500">暂无协议配置，请点击上方"添加协议"</p>}
       </div>
     </div>
