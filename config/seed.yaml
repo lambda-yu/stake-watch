@@ -95,11 +95,11 @@ protocols:
   - name: morpho_gauntlet_frontier_usdc
     chain: ethereum
     collector: morpho
-    vault_address: "0xc582F04d8a82795aa2Ff9c8bb4c1c889fe7b754e"
+    vault_address: "0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45"
     defillama_slug: morpho-blue
     safety_rank: 8
     safety_score: 7.4
-    primary_risks: ["broader collateral acceptance for yield"]
+    primary_risks: ["broader collateral acceptance for yield", "RWA exposure"]
     enabled: true
 
   - name: jupiter_lend
