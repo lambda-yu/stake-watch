@@ -90,6 +90,19 @@ class ConfigStore:
                 row.updated_at = datetime.now(timezone.utc)
                 await s.commit()
 
+    async def update_protocol(self, protocol_id: int, **fields):
+        async with self._sf() as s:
+            row = await s.get(ProtocolConfigRow, protocol_id)
+            if not row:
+                return None
+            for k, v in fields.items():
+                if hasattr(row, k) and v is not None:
+                    setattr(row, k, v)
+            row.updated_at = datetime.now(timezone.utc)
+            await s.commit()
+            await s.refresh(row)
+            return row
+
     async def delete_protocol(self, protocol_id: int):
         async with self._sf() as s:
             row = await s.get(ProtocolConfigRow, protocol_id)

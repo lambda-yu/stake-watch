@@ -175,6 +175,28 @@ async def delete_protocol(protocol_id: int, store: ConfigStore = Depends(get_con
     return Response(status_code=204)
 
 
+@router.post("/fix-vault-addresses")
+async def fix_vault_addresses(store: ConfigStore = Depends(get_config_store)):
+    """One-shot: update known vault addresses for protocols missing them.
+
+    Used when seed.yaml was updated after first DB initialization."""
+    VAULT_ADDRESSES = {
+        "morpho_steakhouse_usdc": ("0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2", "morpho"),
+        "morpho_gauntlet_usdc_prime": ("0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61", "morpho"),
+        "morpho_pangolins_usdc": ("0x1401d1271C47648AC70cBcdfA3776D4A87CE006B", "morpho"),
+        "morpho_gauntlet_frontier_usdc": ("0xc582F04d8a82795aa2Ff9c8bb4c1c889fe7b754e", "morpho"),
+    }
+    updated = []
+    protos = await store.list_protocols()
+    for p in protos:
+        if p.name in VAULT_ADDRESSES:
+            addr, coll = VAULT_ADDRESSES[p.name]
+            if p.vault_address != addr or p.collector != coll:
+                await store.update_protocol(p.id, vault_address=addr, collector=coll)
+                updated.append({"name": p.name, "vault_address": addr})
+    return {"updated": updated}
+
+
 @router.post("/refresh")
 async def refresh_all_protocols(
     store: ConfigStore = Depends(get_config_store),
@@ -210,6 +232,18 @@ async def refresh_all_protocols(
 
     refreshed = []
     failed = []
+    protos = await store.list_protocols()
+
+    # Auto-fix missing vault addresses for known Morpho protocols
+    KNOWN_VAULTS = {
+        "morpho_steakhouse_usdc": "0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2",
+        "morpho_gauntlet_usdc_prime": "0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61",
+        "morpho_pangolins_usdc": "0x1401d1271C47648AC70cBcdfA3776D4A87CE006B",
+        "morpho_gauntlet_frontier_usdc": "0xc582F04d8a82795aa2Ff9c8bb4c1c889fe7b754e",
+    }
+    for p in protos:
+        if p.name in KNOWN_VAULTS and not p.vault_address:
+            await store.update_protocol(p.id, vault_address=KNOWN_VAULTS[p.name])
     protos = await store.list_protocols()
 
     for p in protos:
