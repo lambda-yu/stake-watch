@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { Settings } from './pages/Settings';
 import { Protocols } from './pages/Protocols';
+import { Comparison } from './pages/Comparison';
 import { Stablecoins } from './pages/Stablecoins';
 import { Notifications } from './pages/Notifications';
 
@@ -17,6 +18,9 @@ function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/protocols" className={({ isActive }) =>
             isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
           }>质押协议</NavLink>
+          <NavLink to="/comparison" className={({ isActive }) =>
+            isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
+          }>协议对比</NavLink>
           <NavLink to="/stablecoins" className={({ isActive }) =>
             isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
           }>稳定币监控</NavLink>
@@ -40,6 +44,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/protocols" element={<Protocols />} />
+          <Route path="/comparison" element={<Comparison />} />
           <Route path="/stablecoins" element={<Stablecoins />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />

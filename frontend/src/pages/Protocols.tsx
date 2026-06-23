@@ -35,9 +35,15 @@ export function Protocols() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState<any>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [reportConfig, setReportConfig] = useState<{ interval: number; enabled: boolean }>({ interval: 14400, enabled: true });
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reportResult, setReportResult] = useState<{ success: boolean; error?: string } | null>(null);
 
   const reload = async () => { try { setProtocols(await api.protocols.list()); } catch {} };
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    reload();
+    api.protocols.reportConfig().then(setReportConfig).catch(() => {});
+  }, []);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,6 +124,64 @@ export function Protocols() {
         </form>
       )}
 
+      <div className="bg-gray-900 rounded-lg p-6 mb-6">
+        <h2 className="text-lg font-semibold mb-2">定时报告推送</h2>
+        <p className="text-gray-500 text-sm mb-4">定时将所有启用协议的 APY 和 TVL 推送到 Telegram</p>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={reportConfig.enabled}
+                onChange={async e => {
+                  const enabled = e.target.checked;
+                  const r = await api.protocols.updateReportConfig({ enabled });
+                  setReportConfig(r);
+                }}
+                className="w-4 h-4 rounded bg-gray-800 border-gray-600" />
+              <span className="text-sm">启用定时推送</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-400">推送间隔</label>
+              <select value={reportConfig.interval}
+                onChange={async e => { setReportConfig(await api.protocols.updateReportConfig({ interval: Number(e.target.value) })); }}
+                className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+                <option value={1800}>30 分钟</option>
+                <option value={3600}>1 小时</option>
+                <option value={7200}>2 小时</option>
+                <option value={14400}>4 小时</option>
+                <option value={21600}>6 小时</option>
+                <option value={43200}>12 小时</option>
+                <option value={86400}>24 小时</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                setSendingReport(true); setReportResult(null);
+                try {
+                  const r = await api.protocols.sendReport();
+                  setReportResult(r);
+                } catch (e: any) {
+                  setReportResult({ success: false, error: e.message });
+                } finally { setSendingReport(false); }
+              }}
+              disabled={sendingReport}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-4 py-2 rounded text-sm"
+            >
+              {sendingReport ? '发送中...' : '立即发送报告'}
+            </button>
+            {reportResult && (
+              <span className={`text-sm ${reportResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {reportResult.success ? '已发送' : `失败: ${reportResult.error}`}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">提示: 设置后需重启服务生效；手动发送随时可用</p>
+        </div>
+      </div>
+
       <div className="space-y-6">
         {groups.map(g => {
           const collapsed = collapsedGroups[g.key];
@@ -140,6 +204,7 @@ export function Protocols() {
                     <ProtocolCard key={p.id} protocol={p}
                       onToggle={async (id) => { await api.protocols.toggle(id); reload(); }}
                       onDelete={async (id) => { await api.protocols.delete(id); reload(); }}
+                      onReevaluate={async (id) => { await api.protocols.evaluate(id); reload(); }}
                     />
                   ))}
                 </div>

@@ -27,6 +27,13 @@ export const api = {
     delete: (id: number) =>
       request<void>(`/protocols/${id}`, { method: 'DELETE' }),
     refresh: () => request<any>('/protocols/refresh', { method: 'POST' }),
+    evaluate: (id: number) => request<any>(`/protocols/${id}/evaluate`, { method: 'POST' }),
+    riskStatus: (id: number, refresh = false) =>
+      request<any>(`/protocols/${id}/risk-status${refresh ? '?refresh=true' : ''}`),
+    reportConfig: () => request<any>('/protocols/report-config'),
+    updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
+      request<any>('/protocols/report-config', { method: 'PUT', body: JSON.stringify(data) }),
+    sendReport: () => request<any>('/protocols/report/send', { method: 'POST' }),
   },
   intervals: {
     get: () => request<any>('/config/intervals'),
@@ -57,6 +64,9 @@ export const api = {
   },
   status: {
     get: () => request<any>('/status'),
+  },
+  comparison: {
+    get: () => request<{ rows: any[]; count: number }>('/comparison'),
   },
   stablecoins: {
     snapshots: () => request<any[]>('/stablecoins'),
