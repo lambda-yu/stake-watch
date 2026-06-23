@@ -78,6 +78,8 @@ class ProtocolConfigRow(Base):
     vault_address: Mapped[str | None] = mapped_column(String(100), nullable=True)
     defillama_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pool_filter: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    protocol_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    risk_scores: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: {contract, governance, liquidity, oracle, collateral}
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -87,6 +89,26 @@ class AppSettingsRow(Base):
     key: Mapped[str] = mapped_column(String(100), primary_key=True)
     value: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TvlSnapshotRow(Base):
+    __tablename__ = "tvl_snapshots"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    protocol: Mapped[str] = mapped_column(String(100), index=True)
+    chain: Mapped[str] = mapped_column(String(20))
+    asset: Mapped[str] = mapped_column(String(20))
+    tvl_usd: Mapped[float] = mapped_column(Float)
+    apy: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class VaultSharePriceRow(Base):
+    __tablename__ = "vault_share_prices"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    vault_address: Mapped[str] = mapped_column(String(100), index=True)
+    protocol: Mapped[str] = mapped_column(String(100))
+    share_price_usd: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class AlertRow(Base):

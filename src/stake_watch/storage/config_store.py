@@ -59,14 +59,15 @@ class ConfigStore:
                            safety_rank: int | None = None, safety_score: float | None = None,
                            reference_apy: str | None = None, primary_risks: list[str] | None = None,
                            vault_address: str | None = None, defillama_slug: str | None = None,
-                           pool_filter: str | None = None) -> ProtocolConfigRow:
+                           pool_filter: str | None = None,
+                           protocol_type: str | None = None) -> ProtocolConfigRow:
         async with self._sf() as s:
             now = datetime.now(timezone.utc)
             row = ProtocolConfigRow(name=name, chain=chain, collector=collector, enabled=enabled,
                 safety_rank=safety_rank, safety_score=safety_score, reference_apy=reference_apy,
                 primary_risks=json.dumps(primary_risks or []),
                 vault_address=vault_address, defillama_slug=defillama_slug,
-                pool_filter=pool_filter,
+                pool_filter=pool_filter, protocol_type=protocol_type,
                 created_at=now, updated_at=now)
             s.add(row)
             await s.commit()
@@ -169,7 +170,8 @@ class ConfigStore:
                 primary_risks=proto.get("primary_risks", []),
                 vault_address=proto.get("vault_address"),
                 defillama_slug=proto.get("defillama_slug"),
-                pool_filter=proto.get("pool_filter"))
+                pool_filter=proto.get("pool_filter"),
+                protocol_type=proto.get("protocol_type"))
 
         # Import wallets
         for wallet in data.get("wallets", []):

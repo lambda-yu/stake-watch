@@ -4,7 +4,7 @@ rpc:
   base:
     primary: "https://mainnet.base.org"
   ethereum:
-    primary: "https://eth.public-rpc.com"
+    primary: "https://ethereum.publicnode.com"
   solana:
     primary: "https://api.mainnet-beta.solana.com"
   bsc:
@@ -30,6 +30,7 @@ protocols:
     chain: base
     collector: aave_v3
     defillama_slug: aave-v3
+    protocol_type: lending
     safety_rank: 1
     safety_score: 8.8
     primary_risks: ["shared pool bad debt", "utilization", "Base L2 risk"]
@@ -38,7 +39,8 @@ protocols:
   - name: sky_susds
     chain: ethereum
     collector: sky_susds
-    defillama_slug: sky
+    defillama_slug: sky-lending
+    protocol_type: savings
     safety_rank: 2
     safety_score: 8.5
     primary_risks: ["USDC-to-USDS conversion", "governance", "RWA exposure"]
@@ -49,6 +51,7 @@ protocols:
     collector: morpho
     vault_address: "0xBEEFE94c8aD530842bfE7d8B397938fFc1cb83b2"
     defillama_slug: morpho-blue
+    protocol_type: vault
     safety_rank: 3
     safety_score: 8.3
     primary_risks: ["curator risk", "underlying market bad debt"]
@@ -59,6 +62,7 @@ protocols:
     collector: morpho
     vault_address: "0xeE8F4eC5672F09119b96Ab6fB59C27E1b7e44b61"
     defillama_slug: morpho-blue
+    protocol_type: vault
     safety_rank: 4
     safety_score: 8.2
     primary_risks: ["curator risk", "oracle", "market allocation"]
@@ -68,6 +72,7 @@ protocols:
     chain: base
     collector: compound_v3
     defillama_slug: compound-v3
+    protocol_type: lending
     safety_rank: 5
     safety_score: 8.1
     primary_risks: ["single collateral market risk", "utilization"]
@@ -77,6 +82,7 @@ protocols:
     chain: ethereum
     collector: defillama
     defillama_slug: fluid-lending
+    protocol_type: lending
     safety_rank: 6
     safety_score: 7.8
     primary_risks: ["complex contract system", "utilization"]
@@ -87,6 +93,7 @@ protocols:
     collector: morpho
     vault_address: "0x1401d1271C47648AC70cBcdfA3776D4A87CE006B"
     defillama_slug: morpho-blue
+    protocol_type: vault
     safety_rank: 7
     safety_score: 7.5
     primary_risks: ["Pangolins management capability", "rebalancing"]
@@ -97,6 +104,7 @@ protocols:
     collector: morpho
     vault_address: "0xA8875aaeBc4f830524e35d57F9772FfAcbdD6C45"
     defillama_slug: morpho-blue
+    protocol_type: vault
     safety_rank: 8
     safety_score: 7.4
     primary_risks: ["RWA exposure", "broader collateral acceptance for yield"]
@@ -106,6 +114,7 @@ protocols:
     chain: solana
     collector: defillama
     defillama_slug: jupiter-lend
+    protocol_type: lending
     safety_rank: 9
     safety_score: 7.2
     primary_risks: ["newer protocol", "unified liquidity", "withdrawal smoothing"]
@@ -115,6 +124,7 @@ protocols:
     chain: solana
     collector: kamino
     defillama_slug: kamino-lend
+    protocol_type: lending
     safety_rank: 10
     safety_score: 7.2
     primary_risks: ["Solana risk", "oracle", "liquidation", "market parameters"]

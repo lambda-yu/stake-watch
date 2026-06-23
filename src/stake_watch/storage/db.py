@@ -27,6 +27,16 @@ class Storage:
                 await conn.execute(text("ALTER TABLE protocol_configs ADD COLUMN pool_filter VARCHAR(100)"))
             except Exception:
                 pass
+            try:
+                from sqlalchemy import text
+                await conn.execute(text("ALTER TABLE protocol_configs ADD COLUMN protocol_type VARCHAR(40)"))
+            except Exception:
+                pass
+            try:
+                from sqlalchemy import text
+                await conn.execute(text("ALTER TABLE protocol_configs ADD COLUMN risk_scores TEXT"))
+            except Exception:
+                pass
 
     async def close(self):
         await self._engine.dispose()
@@ -231,3 +241,63 @@ class Storage:
                     price_sources=sources,
                     updated_at=r.updated_at))
             return snapshots
+
+    async def save_tvl_snapshot(self, protocol: str, chain: str, asset: str, tvl_usd: float, apy: float):
+        from stake_watch.storage.tables import TvlSnapshotRow
+        from datetime import datetime, timezone
+        async with self._session_factory() as session:
+            row = TvlSnapshotRow(protocol=protocol, chain=chain, asset=asset,
+                tvl_usd=tvl_usd, apy=apy, created_at=datetime.now(timezone.utc))
+            session.add(row)
+            await session.commit()
+
+    async def get_tvl_n_days_ago(self, protocol: str, chain: str, asset: str, days: int) -> float | None:
+        from stake_watch.storage.tables import TvlSnapshotRow
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import select, and_, desc
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TvlSnapshotRow).where(and_(
+                    TvlSnapshotRow.protocol == protocol,
+                    TvlSnapshotRow.chain == chain,
+                    TvlSnapshotRow.asset == asset,
+                    TvlSnapshotRow.created_at <= cutoff,
+                )).order_by(desc(TvlSnapshotRow.created_at)).limit(1))
+            row = result.scalar_one_or_none()
+            return row.tvl_usd if row else None
+
+
+    async def save_vault_share_price(self, vault_address: str, protocol: str, share_price_usd: float):
+        from stake_watch.storage.tables import VaultSharePriceRow
+        from datetime import datetime, timezone
+        async with self._session_factory() as session:
+            row = VaultSharePriceRow(vault_address=vault_address, protocol=protocol,
+                share_price_usd=share_price_usd, created_at=datetime.now(timezone.utc))
+            session.add(row)
+            await session.commit()
+
+    async def get_vault_share_price_n_hours_ago(self, vault_address: str, hours: int) -> float | None:
+        from stake_watch.storage.tables import VaultSharePriceRow
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import select, and_, desc
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(VaultSharePriceRow).where(and_(
+                    VaultSharePriceRow.vault_address == vault_address,
+                    VaultSharePriceRow.created_at <= cutoff,
+                )).order_by(desc(VaultSharePriceRow.created_at)).limit(1))
+            row = result.scalar_one_or_none()
+            return row.share_price_usd if row else None
+
+    async def get_latest_vault_share_price(self, vault_address: str) -> float | None:
+        from stake_watch.storage.tables import VaultSharePriceRow
+        from sqlalchemy import select, desc
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(VaultSharePriceRow).where(
+                    VaultSharePriceRow.vault_address == vault_address
+                ).order_by(desc(VaultSharePriceRow.created_at)).limit(1))
+            row = result.scalar_one_or_none()
+            return row.share_price_usd if row else None
