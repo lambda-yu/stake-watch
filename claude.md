@@ -2,7 +2,7 @@
 
 Personal cross-chain DeFi yield monitoring and risk alerting tool. Monitors 10 lending/staking protocols across Solana, Ethereum, BSC, and Base. Provides dedicated USDC/USDT stablecoin risk assessment and deep Morpho monitoring.
 
-**Status:** Active development. 87 tests passing.
+**Status:** Active development. 185 tests passing.
 
 ## Tech Stack
 
