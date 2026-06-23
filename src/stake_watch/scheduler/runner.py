@@ -43,6 +43,7 @@ class ScheduledRunner:
     def __init__(self, collection_runner: CollectionRunner, position_interval: int = 300,
                  stats_interval: int = 900, stablecoin_report_interval: int = 3600,
                  dex_liquidity_interval: int = 300, reserves_fetch_interval: int = 21600,
+                 protocols_report_interval: int = 14400,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
@@ -50,6 +51,7 @@ class ScheduledRunner:
         self.stablecoin_report_interval = stablecoin_report_interval
         self.dex_liquidity_interval = dex_liquidity_interval
         self.reserves_fetch_interval = reserves_fetch_interval
+        self.protocols_report_interval = protocols_report_interval
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
@@ -61,6 +63,12 @@ class ScheduledRunner:
             return
         from stake_watch.alerts.stablecoin_report import send_stablecoin_report
         await send_stablecoin_report(self.storage)
+
+    async def _send_protocols_report(self):
+        if not self.storage:
+            return
+        from stake_watch.alerts.protocols_report import send_protocols_report
+        await send_protocols_report(self.storage)
 
     async def _refresh_dex_liquidity(self):
         try:
@@ -135,6 +143,12 @@ class ScheduledRunner:
                 trigger=IntervalTrigger(seconds=self.reserves_fetch_interval),
                 id="reserves_fetch", name="Reserves fetch", replace_existing=True)
             logger.info(f"Reserves fetch every {self.reserves_fetch_interval}s")
+
+        if self.protocols_report_interval > 0 and self.storage:
+            self._scheduler.add_job(self._send_protocols_report,
+                trigger=IntervalTrigger(seconds=self.protocols_report_interval),
+                id="protocols_report", name="Protocols report", replace_existing=True)
+            logger.info(f"Protocols report every {self.protocols_report_interval}s")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")

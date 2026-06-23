@@ -58,6 +58,10 @@ async def main():
     report_interval = await config_store.get_setting("stablecoin.report_interval") or 3600
     dex_interval = await config_store.get_setting("stablecoin.dex_liquidity_interval") or 300
     reserves_interval = await config_store.get_setting("stablecoin.reserves_fetch_interval") or 21600
+    protocols_report_interval = await config_store.get_setting("protocols.report_interval") or 14400
+    protocols_report_enabled = await config_store.get_setting("protocols.report_enabled")
+    if protocols_report_enabled is False:
+        protocols_report_interval = 0
 
     scheduled = ScheduledRunner(
         collection_runner=runner,
@@ -66,6 +70,7 @@ async def main():
         stablecoin_report_interval=report_interval,
         dex_liquidity_interval=dex_interval,
         reserves_fetch_interval=reserves_interval,
+        protocols_report_interval=protocols_report_interval,
         storage=storage,
     )
 
