@@ -1,5 +1,19 @@
 # Stake Watch P3a: Stablecoin Minimum Viable Monitoring
 
+> **STATUS — Superseded as of 2026-06-24.** This plan is delivered in
+> production. The checkboxes below were not updated incrementally; treat
+> them as a historical blueprint, not a TODO. Verified against current
+> code:
+>
+> - `src/stake_watch/collectors/stablecoin/` (price + supply + dex_liquidity)
+> - `src/stake_watch/risk/stablecoin_scorer.py` (in use, 95% covered)
+> - `src/stake_watch/risk/rules/stablecoin.py` (depeg / supply-change rules)
+> - `src/stake_watch/alerts/stablecoin_report.py` (Telegram report)
+> - Test coverage: see tests/collectors/stablecoin/, tests/risk/test_stablecoin_*
+>
+> For *current* stablecoin status open the React frontend (`稳定币监控` page)
+> or hit `/api/stablecoins`.
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Monitor USDC and USDT across 7 of the 10 spec items using free APIs (DefiLlama stablecoins, CoinGecko). Items 9-10 already covered by existing protocol collectors.

@@ -1,5 +1,11 @@
 # Stake Watch P3b: Full 8-Layer Stablecoin Module + Scoring
 
+> **STATUS — Superseded as of 2026-06-24.** Delivered. The 7-dimension scorer
+> lives in `src/stake_watch/risk/stablecoin_scorer.py`; reserves /
+> blacklist / CEX-spread / DEX-liquidity collectors are under
+> `src/stake_watch/collectors/stablecoin/`. Checkboxes below were never
+> ticked — keep as design rationale, don't use as a TODO.
+
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan.
 
 **Goal:** Complete all 8 stablecoin monitoring layers + 7-dimension composite scoring model with hard triggers.
