@@ -65,6 +65,19 @@ export const api = {
   status: {
     get: () => request<any>('/status'),
   },
+  alerts: {
+    list: (limit = 50) => request<any[]>(`/alerts?limit=${limit}`),
+  },
+  positions: {
+    list: (wallet?: string) =>
+      request<{ positions: any[]; count: number }>(
+        wallet ? `/positions?wallet=${encodeURIComponent(wallet)}` : '/positions'
+      ),
+  },
+  backup: {
+    sqliteUrl: () => `${BASE}/backup/sqlite`,
+    jsonUrl: () => `${BASE}/backup/json`,
+  },
   comparison: {
     get: () => request<{ rows: any[]; count: number }>('/comparison'),
   },
