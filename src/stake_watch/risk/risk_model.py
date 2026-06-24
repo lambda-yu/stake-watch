@@ -119,7 +119,20 @@ DIM_NOTES: dict[tuple[str, str], str] = {
     ("kamino_usdc", "governance"):             "Kamino DAO + KMNO 治理",
 }
 
-ASSET_DEFAULT_STABLE = {"USDC": 12, "USDT": 18, "USDS": 20, "USD0": 30, "USD1": 30}
+ASSET_DEFAULT_STABLE = {
+    # USD-pegged blue chips
+    "USDC": 12, "USDT": 18,
+    # Sky / MakerDAO family
+    "USDS": 20, "DAI": 18, "SDAI": 20,
+    # Aave native
+    "GHO": 25,
+    # Curve
+    "CRVUSD": 28,
+    # FRAX family
+    "FRAX": 28, "SFRAX": 30,
+    # Liberty / Usual newer issuers
+    "USD0": 30, "USD1": 30,
+}
 CHAIN_DEFAULT = {"ethereum": 5, "base": 15, "solana": 18, "bsc": 22}
 
 

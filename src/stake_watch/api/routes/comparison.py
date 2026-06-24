@@ -37,8 +37,26 @@ def _stable_safety_coeff(asset: str) -> float:
 @router.get("")
 async def get_comparison(store: ConfigStore = Depends(get_config_store),
                           storage: Storage = Depends(get_storage)):
-    """Return a flat ranked list of all (protocol × chain × asset) products."""
+    """Return a flat ranked list of all (protocol × chain × asset) products.
+
+    On a cold DB (no chains_breakdown setting yet), trigger one refresh pass
+    so the page isn't empty for new users."""
     protos = await store.list_protocols()
+    enabled = [p for p in protos if p.enabled]
+
+    # Cold-start: if no enabled protocol has a chains_breakdown yet, run /refresh once.
+    has_any_chains = False
+    for p in enabled:
+        if await store.get_setting(f"protocols.{p.name}.chains"):
+            has_any_chains = True
+            break
+    if enabled and not has_any_chains:
+        try:
+            from stake_watch.api.routes.protocols import refresh_all_protocols
+            await refresh_all_protocols(store=store, storage=storage)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"comparison cold-start refresh failed: {e}")
 
     # Pass 1: gather raw rows so we can compute peer-median APY per asset
     raw: list[tuple] = []  # (proto_name, chain_full, chain_short, asset, info)

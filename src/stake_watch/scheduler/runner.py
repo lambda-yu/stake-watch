@@ -11,6 +11,45 @@ class CollectionRunner:
         self.collectors = collectors
         self.storage = storage
         self.wallets = wallets
+        # Track consecutive failures per collector → fire one alert at threshold,
+        # then reset on success. Avoids spamming on flaky upstreams.
+        self._consecutive_failures: dict[str, int] = {}
+        self.failure_alert_threshold = 3  # 3 consecutive failures before alerting
+
+    async def _on_collector_failure(self, collector: BaseCollector, error: str):
+        proto = collector.protocol
+        self._consecutive_failures[proto] = self._consecutive_failures.get(proto, 0) + 1
+        if self._consecutive_failures[proto] != self.failure_alert_threshold:
+            return  # only alert exactly on threshold crossing
+        try:
+            from datetime import datetime, timezone
+            from stake_watch.models.alert import Alert, RuleType, Severity
+            chain_val = getattr(collector, "chain", None)
+            chain_str = chain_val.value if hasattr(chain_val, "value") else str(chain_val or "")
+            alert = Alert(
+                rule_type=RuleType.COLLECTOR_FAILURE,
+                severity=Severity.WARNING,
+                protocol=proto, chain=chain_str,
+                title=f"{proto} 采集连续失败 {self.failure_alert_threshold} 次",
+                message=str(error)[:500],
+                details={"consecutive_failures": self._consecutive_failures[proto],
+                         "error": str(error)[:500]},
+                created_at=datetime.now(timezone.utc),
+            )
+            await self.storage.save_alert(alert)
+            # Best-effort Telegram push
+            try:
+                from stake_watch.storage.config_store import ConfigStore
+                from stake_watch.alerts.telegram import TelegramNotifier
+                cs = ConfigStore(self.storage._session_factory)
+                bt = await cs.get_setting("telegram.bot_token")
+                cid = await cs.get_setting("telegram.chat_id")
+                if bt and cid:
+                    await TelegramNotifier(bot_token=bt, chat_id=cid).send(alert)
+            except Exception as push_err:
+                logger.warning(f"collector_failure telegram push failed: {push_err}")
+        except Exception as e:
+            logger.error(f"failed to record collector_failure alert: {e}")
 
     async def _run_single(self, collector: BaseCollector, wallet: str) -> CollectResult:
         try:
@@ -22,9 +61,14 @@ class CollectionRunner:
             if result.errors:
                 for err in result.errors:
                     logger.warning(err)
+                await self._on_collector_failure(collector, "; ".join(result.errors)[:500])
+            else:
+                # success → reset counter so future failures can re-alert
+                self._consecutive_failures.pop(collector.protocol, None)
             return result
         except Exception as e:
             logger.error(f"{collector.protocol}: unhandled error: {e}")
+            await self._on_collector_failure(collector, str(e))
             return CollectResult(errors=[str(e)])
 
     async def run_collection_cycle(self) -> list[CollectResult]:
