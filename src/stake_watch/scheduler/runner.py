@@ -45,6 +45,7 @@ class ScheduledRunner:
                  dex_liquidity_interval: int = 300, reserves_fetch_interval: int = 21600,
                  protocols_report_interval: int = 14400,
                  snapshots_interval: int = 14400,
+                 risk_monitor_interval: int = 3600,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
@@ -54,6 +55,7 @@ class ScheduledRunner:
         self.reserves_fetch_interval = reserves_fetch_interval
         self.protocols_report_interval = protocols_report_interval
         self.snapshots_interval = snapshots_interval
+        self.risk_monitor_interval = risk_monitor_interval
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
@@ -87,6 +89,17 @@ class ScheduledRunner:
             logger.info(f"Snapshots written: tvl={tvl_n} share_price={sp_n}")
         except Exception as e:
             logger.error(f"Snapshot job failed: {e}")
+
+    async def _run_risk_monitor(self):
+        if not self.storage:
+            return
+        from stake_watch.risk.protocol_risk_monitor import run_risk_monitor_with_telegram
+        try:
+            n = await run_risk_monitor_with_telegram(self.storage)
+            if n:
+                logger.info(f"Risk monitor emitted {n} alert(s)")
+        except Exception as e:
+            logger.error(f"Risk monitor failed: {e}")
 
     async def _refresh_dex_liquidity(self):
         try:
@@ -174,6 +187,13 @@ class ScheduledRunner:
                 id="snapshots", name="TVL + share-price snapshots",
                 replace_existing=True)
             logger.info(f"Snapshots every {self.snapshots_interval}s")
+
+        if self.risk_monitor_interval > 0 and self.storage:
+            self._scheduler.add_job(self._run_risk_monitor,
+                trigger=IntervalTrigger(seconds=self.risk_monitor_interval),
+                id="risk_monitor", name="Risk monitor + alerts",
+                replace_existing=True)
+            logger.info(f"Risk monitor every {self.risk_monitor_interval}s")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")

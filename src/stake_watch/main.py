@@ -75,6 +75,7 @@ async def main():
     if protocols_report_enabled is False:
         protocols_report_interval = 0
     snapshots_interval = await config_store.get_setting("protocols.snapshots_interval") or 14400
+    risk_monitor_interval = await config_store.get_setting("risk_monitor.interval") or 3600
 
     scheduled = ScheduledRunner(
         collection_runner=runner,
@@ -85,6 +86,7 @@ async def main():
         reserves_fetch_interval=reserves_interval,
         protocols_report_interval=protocols_report_interval,
         snapshots_interval=snapshots_interval,
+        risk_monitor_interval=risk_monitor_interval,
         storage=storage,
     )
 
