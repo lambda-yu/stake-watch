@@ -44,6 +44,7 @@ class ScheduledRunner:
                  stats_interval: int = 900, stablecoin_report_interval: int = 3600,
                  dex_liquidity_interval: int = 300, reserves_fetch_interval: int = 21600,
                  protocols_report_interval: int = 14400,
+                 snapshots_interval: int = 14400,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
@@ -52,6 +53,7 @@ class ScheduledRunner:
         self.dex_liquidity_interval = dex_liquidity_interval
         self.reserves_fetch_interval = reserves_fetch_interval
         self.protocols_report_interval = protocols_report_interval
+        self.snapshots_interval = snapshots_interval
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
@@ -69,6 +71,22 @@ class ScheduledRunner:
             return
         from stake_watch.alerts.protocols_report import send_protocols_report
         await send_protocols_report(self.storage)
+
+    async def _write_snapshots(self):
+        if not self.storage:
+            return
+        from stake_watch.storage.config_store import ConfigStore
+        from stake_watch.storage.snapshots import (
+            write_tvl_snapshots_from_settings,
+            write_vault_share_price_snapshots,
+        )
+        store = ConfigStore(self.storage._session_factory)
+        try:
+            tvl_n = await write_tvl_snapshots_from_settings(store, self.storage)
+            sp_n = await write_vault_share_price_snapshots(store, self.storage)
+            logger.info(f"Snapshots written: tvl={tvl_n} share_price={sp_n}")
+        except Exception as e:
+            logger.error(f"Snapshot job failed: {e}")
 
     async def _refresh_dex_liquidity(self):
         try:
@@ -149,6 +167,13 @@ class ScheduledRunner:
                 trigger=IntervalTrigger(seconds=self.protocols_report_interval),
                 id="protocols_report", name="Protocols report", replace_existing=True)
             logger.info(f"Protocols report every {self.protocols_report_interval}s")
+
+        if self.snapshots_interval > 0 and self.storage:
+            self._scheduler.add_job(self._write_snapshots,
+                trigger=IntervalTrigger(seconds=self.snapshots_interval),
+                id="snapshots", name="TVL + share-price snapshots",
+                replace_existing=True)
+            logger.info(f"Snapshots every {self.snapshots_interval}s")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")

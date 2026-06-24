@@ -464,21 +464,15 @@ async def refresh_all_protocols(
         except Exception as e:
             failed.append({"name": p.name, "reason": f"{type(e).__name__}: {e}" if str(e) else type(e).__name__})
 
-    # Write TVL snapshots for trend analysis
+    # Write TVL snapshots for trend analysis (also driven periodically by scheduler).
     try:
-        for r in refreshed:
-            proto_name = r["name"]
-            chains_data = await store.get_setting(f"protocols.{proto_name}.chains") or []
-            for entry in chains_data:
-                chain_full = (entry.get("chain_full") or entry.get("chain") or "").lower()
-                for asset, info in (entry.get("by_asset") or {}).items():
-                    tvl = float(info.get("tvl_usd") or 0)
-                    apy = float(info.get("apy") or 0)
-                    if tvl > 0:
-                        await storage.save_tvl_snapshot(proto_name, chain_full, asset.upper(), tvl, apy)
+        from stake_watch.storage.snapshots import write_tvl_snapshots_from_settings
+        names = [r["name"] for r in refreshed]
+        if names:
+            await write_tvl_snapshots_from_settings(store, storage, names=names)
     except Exception as e:
-        logger = __import__("logging").getLogger(__name__)
-        logger.warning(f"TVL snapshot write failed: {e}")
+        import logging
+        logging.getLogger(__name__).warning(f"TVL snapshot write failed: {e}")
 
     return {"refreshed": refreshed, "failed": failed,
             "updated_at": datetime.now(timezone.utc).isoformat()}
