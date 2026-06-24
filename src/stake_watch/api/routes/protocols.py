@@ -47,17 +47,33 @@ PRIMARY_PRODUCT: dict[str, tuple[str, str]] = {
 
 
 def _to_dict(p):
-    from stake_watch.risk.risk_model import evaluate, DIM_LABELS, DIMENSIONS
+    from stake_watch.risk.risk_model import DIM_LABELS, DIMENSIONS
     chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
-    risk = evaluate(p.name, chain, asset, None)
-    risk_dimensions = [
-        {"key": k, "label": DIM_LABELS[k], "weight": w,
-         "score": risk.dimensions[k]["score"],
-         "notes": risk.dimensions[k]["notes"],
-         "source": risk.dimensions[k].get("source", "curated")}
-        for k, _, w in DIMENSIONS
-    ]
-    from datetime import datetime, timezone
+    cached = None
+    if getattr(p, "risk_scores", None):
+        try:
+            cached = json.loads(p.risk_scores)
+        except (ValueError, TypeError):
+            cached = None
+    if cached and "total" in cached and "dimensions" in cached:
+        risk_total = cached["total"]
+        risk_level = cached["level"]
+        risk_dimensions = cached["dimensions"]
+        risk_evaluated_at = cached.get("evaluated_at")
+    else:
+        from stake_watch.risk.risk_model import evaluate
+        from datetime import datetime, timezone
+        risk = evaluate(p.name, chain, asset, None)
+        risk_total = risk.total
+        risk_level = risk.level
+        risk_dimensions = [
+            {"key": k, "label": DIM_LABELS[k], "weight": w,
+             "score": risk.dimensions[k]["score"],
+             "notes": risk.dimensions[k]["notes"],
+             "source": risk.dimensions[k].get("source", "curated")}
+            for k, _, w in DIMENSIONS
+        ]
+        risk_evaluated_at = datetime.now(timezone.utc).isoformat()
     return {"id": p.id, "name": p.name, "chain": p.chain, "collector": p.collector,
         "enabled": p.enabled, "safety_rank": p.safety_rank, "safety_score": p.safety_score,
         "reference_apy": p.reference_apy, "primary_risks": json.loads(p.primary_risks) if p.primary_risks else [],
@@ -65,10 +81,41 @@ def _to_dict(p):
         "pool_filter": getattr(p, "pool_filter", None),
         "protocol_type": getattr(p, "protocol_type", None) or _classify(p.name),
         "primary_chain": chain, "primary_asset": asset,
-        "risk_total": risk.total,
-        "risk_level": risk.level,
+        "risk_total": risk_total,
+        "risk_level": risk_level,
         "risk_dimensions": risk_dimensions,
-        "risk_evaluated_at": datetime.now(timezone.utc).isoformat()}
+        "risk_evaluated_at": risk_evaluated_at}
+
+
+def _compute_baseline_risk(name: str, chain: str, asset: str) -> dict:
+    """Compute the deterministic baseline risk (no live signals) for caching."""
+    from datetime import datetime, timezone
+    from stake_watch.risk.risk_model import evaluate, DIM_LABELS, DIMENSIONS
+    risk = evaluate(name, chain, asset, None)
+    return {
+        "total": risk.total,
+        "level": risk.level,
+        "dimensions": [
+            {"key": k, "label": DIM_LABELS[k], "weight": w,
+             "score": risk.dimensions[k]["score"],
+             "notes": risk.dimensions[k]["notes"],
+             "source": risk.dimensions[k].get("source", "curated")}
+            for k, _, w in DIMENSIONS
+        ],
+        "evaluated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def recalc_baseline_risk(store: ConfigStore) -> int:
+    """Recompute + persist baseline risk_scores for all protocols. Returns count."""
+    protos = await store.list_protocols()
+    n = 0
+    for p in protos:
+        chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
+        scores = _compute_baseline_risk(p.name, chain, asset)
+        await store.update_protocol(p.id, risk_scores=json.dumps(scores))
+        n += 1
+    return n
 
 
 async def _enrich_with_stats(protocol_dict: dict, storage: Storage) -> dict:
@@ -203,6 +250,10 @@ async def get_protocol_chains(protocol_id: int,
 @router.post("", status_code=201)
 async def add_protocol(data: ProtocolCreate, store: ConfigStore = Depends(get_config_store)):
     p = await store.add_protocol(**data.model_dump())
+    chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
+    scores = _compute_baseline_risk(p.name, chain, asset)
+    await store.update_protocol(p.id, risk_scores=json.dumps(scores))
+    p = await store.get_protocol(p.id)
     return _to_dict(p)
 
 @router.patch("/{protocol_id}/toggle")
@@ -210,6 +261,15 @@ async def toggle_protocol(protocol_id: int, store: ConfigStore = Depends(get_con
     await store.toggle_protocol(protocol_id)
     p = await store.get_protocol(protocol_id)
     return _to_dict(p)
+
+
+@router.post("/recalc-risk")
+async def recalc_all_baseline_risk(store: ConfigStore = Depends(get_config_store)):
+    """Recompute and persist baseline (no-live-signal) risk for every protocol.
+
+    Run after editing PRODUCT_RISK / PRODUCT_TOTAL tables in risk_model.py."""
+    n = await recalc_baseline_risk(store)
+    return {"updated": n}
 
 
 class RiskScoresUpdate(BaseModel):

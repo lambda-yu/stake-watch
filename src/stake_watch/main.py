@@ -55,6 +55,18 @@ async def main():
 
     from stake_watch.storage.config_store import ConfigStore
     config_store = ConfigStore(storage._session_factory)
+
+    # Populate any missing baseline risk_scores so /api/protocols GET stays cheap.
+    try:
+        from stake_watch.api.routes.protocols import recalc_baseline_risk
+        protos = await config_store.list_protocols()
+        missing = [p for p in protos if not getattr(p, "risk_scores", None)]
+        if missing:
+            n = await recalc_baseline_risk(config_store)
+            logger.info(f"Baseline risk backfilled for {n} protocols")
+    except Exception as e:
+        logger.warning(f"Baseline risk backfill skipped: {e}")
+
     report_interval = await config_store.get_setting("stablecoin.report_interval") or 3600
     dex_interval = await config_store.get_setting("stablecoin.dex_liquidity_interval") or 300
     reserves_interval = await config_store.get_setting("stablecoin.reserves_fetch_interval") or 21600
