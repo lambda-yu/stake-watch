@@ -8,10 +8,13 @@ Score: start at 10, -1 per warning, -3 per critical, floored at 0.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 from stake_watch.storage.config_store import ConfigStore
 from stake_watch.storage.db import Storage
+
+logger = logging.getLogger(__name__)
 
 
 def _fmt_tvl(v: float) -> str:
@@ -102,7 +105,8 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
     if stats and stats.pools:
         try:
             snapshots = await storage.get_latest_stablecoin_snapshots()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"stablecoin snapshot fetch failed for {protocol_name}: {e}")
             snapshots = []
         token_priorities = ["USDC", "USDT", "USDS", "USD0", "USD1"]
         for token in token_priorities:
@@ -283,8 +287,8 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
                     checks.append(_check("vault_share_price", "Vault Share Price", "ok",
                         f"${latest:.6f}",
                         "已记录最新 share price，24h 后可比对趋势"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"vault share-price trend lookup failed for {protocol_name}: {e}")
 
             # ---- Morpho curator activity ----
             try:
@@ -392,8 +396,8 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
                         # bump governance dim slightly
                         cur = dims_governance = None  # placeholder; signal carried by risk_model below
                         live_signals["curator_inactive_days"] = days
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"morpho on-chain signals failed for {protocol_name}: {e}")
 
         rm = evaluate(protocol_name, primary_chain, primary_asset, apy,
                        live_signals=live_signals or None)
@@ -442,8 +446,8 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
                                     live_signals.get("bad_debt_ratio", 0),
                                     float(info["bad_debt_ratio"]))
                     break
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"withdrawal-sim check failed for {protocol_name}: {e}")
 
         # Veto: stablecoin depeg from latest snapshot
         veto_kwargs = {}
@@ -452,8 +456,8 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
             snap = next((s for s in snaps if getattr(s, "token", "").upper() == primary_asset), None)
             if snap and getattr(snap, "median_price", None):
                 veto_kwargs["stablecoin_price"] = float(snap.median_price)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"depeg veto lookup failed for {protocol_name}: {e}")
         if "oracle_staleness_seconds" in live_signals:
             veto_kwargs["oracle_stale_seconds"] = live_signals["oracle_staleness_seconds"]
             veto_kwargs["oracle_heartbeat_seconds"] = live_signals.get("oracle_heartbeat_seconds", 86400)
