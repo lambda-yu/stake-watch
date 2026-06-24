@@ -32,18 +32,7 @@ def _classify(name: str) -> str:
 
 
 # Primary (chain, asset) for each protocol — drives the protocol-level risk summary.
-PRIMARY_PRODUCT: dict[str, tuple[str, str]] = {
-    "aave_v3_base":               ("base",     "USDC"),
-    "sky_susds":                  ("ethereum", "USDS"),
-    "compound_v3_usdc":           ("base",     "USDC"),
-    "morpho_steakhouse_usdc":     ("base",     "USDC"),
-    "morpho_gauntlet_usdc_prime": ("base",     "USDC"),
-    "morpho_pangolins_usdc":      ("base",     "USDC"),
-    "morpho_gauntlet_rwa_usdc":   ("ethereum", "USDC"),
-    "fluid_usdc":                 ("ethereum", "USDC"),
-    "jupiter_lend":               ("solana",   "USDC"),
-    "kamino_usdc":                ("solana",   "USDC"),
-}
+from stake_watch.risk.products import PRIMARY_PRODUCT
 
 
 def _to_dict(p):

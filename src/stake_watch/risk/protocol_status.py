@@ -160,7 +160,7 @@ async def evaluate_protocol_status(protocol_name: str, storage: Storage,
             fetch_pyth_price,
             CHAINLINK_FEEDS, SEQUENCER_FEEDS
         )
-        from stake_watch.api.routes.protocols import PRIMARY_PRODUCT  # type: ignore
+        from stake_watch.risk.products import PRIMARY_PRODUCT
         primary_chain, primary_asset = PRIMARY_PRODUCT.get(protocol_name, (p.chain, "USDC"))
         apy = 0.0
         if stats and stats.pools:
