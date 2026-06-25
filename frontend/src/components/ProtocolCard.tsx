@@ -20,6 +20,14 @@ type Protocol = {
   risk_level?: 'A' | 'B' | 'C' | 'D' | 'E' | null;
   risk_dimensions?: RiskDim[] | null;
   risk_evaluated_at?: string | null;
+  risk_total_baseline?: number | null;
+  risk_level_baseline?: 'A' | 'B' | 'C' | 'D' | 'E' | null;
+  live_risk?: {
+    total: number;
+    level: 'A' | 'B' | 'C' | 'D' | 'E';
+    veto_flags: string[];
+    evaluated_at: string;
+  } | null;
   live_tvl_usd?: number | null;
   live_apy?: number | null;
   live_pool_asset?: string | null;
@@ -194,13 +202,34 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete, onReevaluate }: 
           )}
           {p.risk_total !== undefined && p.risk_total !== null && p.risk_level && (
             <button onClick={() => setShowRadar(s => !s)}
-              className="mt-2 text-xs text-indigo-300 hover:text-indigo-200 inline-flex items-center gap-2">
+              className="mt-2 text-xs text-indigo-300 hover:text-indigo-200 inline-flex items-center gap-2 flex-wrap">
               <span>{showRadar ? '▼' : '▶'}</span>
               <span>风险评估</span>
-              <span className={`px-1.5 py-0.5 rounded border ${LEVEL_BADGE[p.risk_level]}`}>
-                {p.risk_level} · {p.risk_total.toFixed(0)}
-              </span>
-              <span className="text-gray-500">{LEVEL_DESC[p.risk_level]}</span>
+              {p.live_risk ? (
+                <>
+                  <span className={`px-1.5 py-0.5 rounded border ${LEVEL_BADGE[p.live_risk.level]}`}
+                        title={`live @ ${new Date(p.live_risk.evaluated_at).toLocaleString('zh-CN', { hour12: false })}`}>
+                    {p.live_risk.level} · {p.live_risk.total.toFixed(0)}
+                    <span className="ml-1 text-[10px] uppercase opacity-70">live</span>
+                  </span>
+                  {p.live_risk.level !== p.risk_level && (
+                    <span className="text-gray-500 line-through opacity-50">
+                      {p.risk_level} · {p.risk_total.toFixed(0)}
+                    </span>
+                  )}
+                  <span className="text-gray-500">{LEVEL_DESC[p.live_risk.level]}</span>
+                  {p.live_risk.veto_flags.length > 0 && (
+                    <span className="text-red-400 text-[11px]">⚠ 否决 {p.live_risk.veto_flags.length} 项</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <span className={`px-1.5 py-0.5 rounded border ${LEVEL_BADGE[p.risk_level]}`}>
+                    {p.risk_level} · {p.risk_total.toFixed(0)}
+                  </span>
+                  <span className="text-gray-500">{LEVEL_DESC[p.risk_level]}</span>
+                </>
+              )}
             </button>
           )}
           {riskStatus && (

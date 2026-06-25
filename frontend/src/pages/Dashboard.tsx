@@ -11,6 +11,12 @@ type Protocol = {
   risk_level?: string;
   primary_chain?: string;
   primary_asset?: string;
+  live_risk?: {
+    total: number;
+    level: string;
+    veto_flags: string[];
+    evaluated_at: string;
+  } | null;
 };
 type Alert = {
   severity: 'critical' | 'warning' | 'info';
@@ -65,9 +71,13 @@ export function Dashboard() {
       .catch(e => setErr(e.message));
   }, []);
 
+  const effectiveScore = (p: Protocol) =>
+    p.live_risk?.total ?? p.risk_total ?? 0;
+  const effectiveLevel = (p: Protocol) =>
+    p.live_risk?.level ?? p.risk_level ?? 'A';
   const topRisks = [...protocols]
-    .filter(p => p.enabled && typeof p.risk_total === 'number')
-    .sort((a, b) => (b.risk_total ?? 0) - (a.risk_total ?? 0))
+    .filter(p => p.enabled && typeof effectiveScore(p) === 'number')
+    .sort((a, b) => effectiveScore(b) - effectiveScore(a))
     .slice(0, 5);
 
   return (
@@ -109,11 +119,14 @@ export function Dashboard() {
                     </span>
                   </div>
                   <div className="flex items-center gap-3 whitespace-nowrap">
-                    <span className={`text-xs font-bold ${LEVEL_COLOR[p.risk_level ?? 'A']}`}>
-                      {p.risk_level}
+                    {p.live_risk && (
+                      <span className="text-[9px] uppercase text-gray-500" title="live (含链上信号)">live</span>
+                    )}
+                    <span className={`text-xs font-bold ${LEVEL_COLOR[effectiveLevel(p)]}`}>
+                      {effectiveLevel(p)}
                     </span>
                     <span className="text-gray-400 tabular-nums">
-                      {p.risk_total?.toFixed(1)}
+                      {effectiveScore(p).toFixed(1)}
                     </span>
                   </div>
                 </li>

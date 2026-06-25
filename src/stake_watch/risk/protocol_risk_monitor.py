@@ -135,9 +135,16 @@ async def run_risk_monitor(storage: Storage, config_store: ConfigStore,
                     except Exception as e:
                         logger.warning(f"notifier failed for {p.name}: {e}")
 
-        # Always update last-seen level (even if no escalation/cooldown blocked)
+        # Always update last-seen evaluation so frontend can show live values
+        # alongside the cached baseline (and so escalation deltas survive restarts).
         if level:
             await config_store.set_setting(f"risk_monitor.last_level.{p.name}", level)
+            await config_store.set_setting(
+                f"risk_monitor.last_evaluation.{p.name}",
+                {"total": rm.get("total"), "level": level,
+                 "veto_flags": veto_flags,
+                 "primary_chain": chain, "primary_asset": asset,
+                 "evaluated_at": datetime.now(timezone.utc).isoformat()})
 
     return emitted
 

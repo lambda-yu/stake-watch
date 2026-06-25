@@ -35,7 +35,7 @@ def _classify(name: str) -> str:
 from stake_watch.risk.products import PRIMARY_PRODUCT
 
 
-def _to_dict(p):
+def _to_dict(p, live: dict | None = None):
     from stake_watch.risk.risk_model import DIM_LABELS, DIMENSIONS
     chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
     cached = None
@@ -63,6 +63,16 @@ def _to_dict(p):
             for k, _, w in DIMENSIONS
         ]
         risk_evaluated_at = datetime.now(timezone.utc).isoformat()
+
+    # Live evaluation overlay from risk_monitor (when scheduler has run since startup).
+    live_block = None
+    if live and isinstance(live, dict) and "total" in live and "level" in live:
+        live_block = {
+            "total": live["total"], "level": live["level"],
+            "veto_flags": live.get("veto_flags") or [],
+            "evaluated_at": live.get("evaluated_at"),
+        }
+
     return {"id": p.id, "name": p.name, "chain": p.chain, "collector": p.collector,
         "enabled": p.enabled, "safety_rank": p.safety_rank, "safety_score": p.safety_score,
         "reference_apy": p.reference_apy, "primary_risks": json.loads(p.primary_risks) if p.primary_risks else [],
@@ -73,7 +83,10 @@ def _to_dict(p):
         "risk_total": risk_total,
         "risk_level": risk_level,
         "risk_dimensions": risk_dimensions,
-        "risk_evaluated_at": risk_evaluated_at}
+        "risk_evaluated_at": risk_evaluated_at,
+        "risk_total_baseline": risk_total,
+        "risk_level_baseline": risk_level,
+        "live_risk": live_block}
 
 
 def _compute_baseline_risk(name: str, chain: str, asset: str) -> dict:
@@ -210,9 +223,16 @@ async def _fetch_multi_chain_data(defillama_slug: str, pool_filter: str | None =
 async def list_protocols(store: ConfigStore = Depends(get_config_store),
                           storage: Storage = Depends(get_storage)):
     protos = await store.list_protocols()
+    # Bulk-load latest live evaluations (written by risk_monitor) so cards
+    # show what Telegram alerts see, not just the cached baseline.
+    live_by_name: dict[str, dict] = {}
+    for p in protos:
+        ev = await store.get_setting(f"risk_monitor.last_evaluation.{p.name}")
+        if ev:
+            live_by_name[p.name] = ev
     enriched = []
     for p in protos:
-        d = _to_dict(p)
+        d = _to_dict(p, live=live_by_name.get(p.name))
         d = await _enrich_with_stats(d, storage)
         chains_data = await store.get_setting(f"protocols.{p.name}.chains")
         if chains_data:

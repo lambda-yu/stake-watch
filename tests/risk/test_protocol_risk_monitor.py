@@ -135,6 +135,23 @@ async def test_last_level_persisted_for_next_run(store, storage):
     assert await store.get_setting("risk_monitor.last_level.aave_v3_base") == "B"
 
 
+@pytest.mark.asyncio
+async def test_last_evaluation_full_block_persisted(store, storage):
+    """Frontend reads risk_monitor.last_evaluation.{name} to display live values
+    alongside cached baseline — make sure every successful run writes it."""
+    await store.add_protocol(name="aave_v3_base", chain="base",
+                              collector="defillama")
+    block = _status_block("C", total=31.0, veto=["foo"])
+    with _patch_evaluate({"aave_v3_base": block}):
+        await run_risk_monitor(storage, store, cooldown_minutes=0)
+    ev = await store.get_setting("risk_monitor.last_evaluation.aave_v3_base")
+    assert ev is not None
+    assert ev["total"] == 31.0
+    assert ev["level"] == "C"
+    assert ev["veto_flags"] == ["foo"]
+    assert "evaluated_at" in ev
+
+
 # ---------- cooldown ----------
 
 @pytest.mark.asyncio

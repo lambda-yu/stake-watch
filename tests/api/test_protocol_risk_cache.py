@@ -169,3 +169,34 @@ async def test_subsequent_get_uses_cached_risk(client, store, monkeypatch):
     r = await client.get("/api/protocols")
     assert r.status_code == 200
     assert calls["n"] == 0, "GET should use cached risk_scores, not re-evaluate"
+
+
+@pytest.mark.asyncio
+async def test_get_protocols_surfaces_live_risk_when_persisted(client, store):
+    """When risk_monitor has persisted a live evaluation, GET /api/protocols
+    must include it under `live_risk` so the dashboard can show what
+    Telegram alerts see, not just the cached baseline."""
+    r = await client.post("/api/protocols", json={
+        "name": "compound_v3_usdc", "chain": "base", "collector": "defillama"})
+    assert r.status_code == 201
+    await store.set_setting("risk_monitor.last_evaluation.compound_v3_usdc", {
+        "total": 31.0, "level": "C", "veto_flags": [],
+        "primary_chain": "base", "primary_asset": "USDC",
+        "evaluated_at": "2026-06-25T08:00:00+00:00",
+    })
+
+    body = (await client.get("/api/protocols")).json()
+    row = next(x for x in body if x["name"] == "compound_v3_usdc")
+    assert row["live_risk"] is not None
+    assert row["live_risk"]["total"] == 31.0
+    assert row["live_risk"]["level"] == "C"
+    # baseline still exposed for comparison
+    assert row["risk_total_baseline"] is not None
+
+
+@pytest.mark.asyncio
+async def test_get_protocols_live_risk_absent_when_no_monitor_run(client, store):
+    await client.post("/api/protocols", json={
+        "name": "aave_v3_base", "chain": "base", "collector": "defillama"})
+    body = (await client.get("/api/protocols")).json()
+    assert body[0]["live_risk"] is None
