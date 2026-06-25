@@ -40,6 +40,8 @@ function formatTvl(v: number): string {
 export function Comparison() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNote, setRefreshNote] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [filterAsset, setFilterAsset] = useState<string>('all');
   const [filterChain, setFilterChain] = useState<string>('all');
@@ -51,6 +53,23 @@ export function Comparison() {
     catch { setRows([]); }
     finally { setLoading(false); }
   };
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setRefreshNote(null);
+    try {
+      const r = await api.protocols.refresh();
+      const ok = r?.refreshed?.length ?? 0;
+      const failed = r?.failed?.length ?? 0;
+      setRefreshNote(`已拉取 ${ok} 个协议${failed ? `，${failed} 个失败` : ''}`);
+      await reload();
+    } catch (e: any) {
+      setRefreshNote(`刷新失败: ${e.message}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => { reload(); }, []);
 
   const filtered = useMemo(() => {
@@ -83,10 +102,20 @@ export function Comparison() {
             按 综合选择分 = 风险调整收益 × 流动性系数 × 稳定币安全系数 排序
           </p>
         </div>
-        <button onClick={reload} disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded text-sm">
-          {loading ? '加载中...' : '🔄 刷新'}
-        </button>
+        <div className="flex items-center gap-3">
+          {refreshNote && (
+            <span className="text-xs text-gray-400">{refreshNote}</span>
+          )}
+          <button onClick={reload} disabled={loading || refreshing}
+            className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 text-gray-200 border border-gray-700 px-3 py-2 rounded text-sm">
+            {loading ? '加载中...' : '重新加载'}
+          </button>
+          <button onClick={refresh} disabled={loading || refreshing}
+            title="拉取最新链上 APY/TVL 后重新计算"
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white px-4 py-2 rounded text-sm">
+            {refreshing ? '拉取中... (~30s)' : '🔄 刷新数据'}
+          </button>
+        </div>
       </div>
 
       <div className="bg-gray-900 rounded-lg p-3 mb-4 flex gap-3 flex-wrap text-sm items-center">
