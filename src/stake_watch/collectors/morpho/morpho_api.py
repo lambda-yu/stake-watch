@@ -20,7 +20,14 @@ CHAIN_IDS = {"base": 8453, "ethereum": 1}
 async def fetch_vault_data(vault_address: str, chain: str = "base") -> dict | None:
     """Fetch live data for a specific Morpho vault by address.
 
-    Returns: {tvl_usd, net_apy, apy, name, asset, symbol} or None.
+    Returns: {tvl_usd, net_apy, apy, name, asset, symbol, share_price_usd,
+              withdrawable_usd, withdrawable_ratio, utilization} or None.
+
+    Liquidity model: a Morpho vault holds an idle cash tranche + supplies to
+    N markets. The withdrawable amount equals
+      idle_usd + Σ min(supplyAssetsUsd_per_market, market_liquidityAssetsUsd)
+    `utilization` is exposed as a 1 - withdrawable_ratio proxy because vault
+    contracts don't have a direct utilization concept.
     """
     chain_id = CHAIN_IDS.get(chain.lower(), 8453)
     query = """
@@ -31,7 +38,13 @@ async def fetch_vault_data(vault_address: str, chain: str = "base") -> dict | No
           address
           symbol
           asset { symbol }
-          state { totalAssetsUsd netApy apy sharePriceUsd }
+          state {
+            totalAssetsUsd netApy apy sharePriceUsd
+            allocation {
+              supplyAssetsUsd
+              market { state { liquidityAssetsUsd } }
+            }
+          }
         }
       }
     }
@@ -47,14 +60,34 @@ async def fetch_vault_data(vault_address: str, chain: str = "base") -> dict | No
             return None
         v = items[0]
         st = v.get("state") or {}
+        total_assets = float(st.get("totalAssetsUsd") or 0)
+
+        allocations = st.get("allocation") or []
+        supplied = 0.0
+        withdrawable_from_markets = 0.0
+        for a in allocations:
+            supply_usd = float(a.get("supplyAssetsUsd") or 0)
+            supplied += supply_usd
+            market_liq = float(((a.get("market") or {}).get("state") or {})
+                                .get("liquidityAssetsUsd") or 0)
+            withdrawable_from_markets += min(supply_usd, market_liq)
+        idle_usd = max(0.0, total_assets - supplied)
+        withdrawable_usd = idle_usd + withdrawable_from_markets
+        withdrawable_ratio = (withdrawable_usd / total_assets) if total_assets > 0 else 0.0
+        utilization = max(0.0, 1.0 - withdrawable_ratio) if total_assets > 0 else 0.0
+
         return {
             "name": v.get("name"),
             "asset": v.get("asset", {}).get("symbol", "USDC"),
             "symbol": v.get("symbol"),
-            "tvl_usd": float(st.get("totalAssetsUsd") or 0),
+            "tvl_usd": total_assets,
             "apy": float(st.get("apy") or 0) * 100,
             "net_apy": float(st.get("netApy") or 0) * 100,
             "share_price_usd": float(st.get("sharePriceUsd") or 0),
+            "withdrawable_usd": withdrawable_usd,
+            "available_liquidity_usd": withdrawable_usd,
+            "withdrawable_ratio": withdrawable_ratio,
+            "utilization": utilization,
         }
     except Exception as e:
         logger.error(f"Morpho API error for {vault_address}: {e}")

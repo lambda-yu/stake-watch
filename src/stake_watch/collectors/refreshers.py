@@ -43,22 +43,27 @@ async def refresh_morpho(p, store: ConfigStore, storage: Storage) -> dict | None
         except Exception:
             pass
     tvl_d = Decimal(str(vd["tvl_usd"]))
+    util = float(vd.get("utilization") or 0)
     pool = PoolStats(pool_id=p.vault_address, asset=vd["asset"],
         supply_apy=vd["apy"], borrow_apy=0, total_supply=tvl_d,
-        total_borrow=Decimal("0"), utilization=0)
+        total_borrow=Decimal("0"), utilization=util)
     stats = ProtocolStats(chain=Chain(p.chain), protocol=p.name,
         tvl_usd=tvl_d, pools=[pool], updated_at=_now())
     await storage.save_protocol_stats(stats)
 
     chain_full = DEFILLAMA_CHAIN_MAP.get(p.chain, p.chain)
     chain_display = CHAIN_DISPLAY.get(chain_full, p.chain.upper())
+    by_asset_info = {
+        "tvl_usd": vd["tvl_usd"], "apy": vd["apy"], "pools": 1,
+        "share_price_usd": vd.get("share_price_usd"),
+        "utilization": util,
+        "withdrawable_ratio": float(vd.get("withdrawable_ratio") or 0),
+        "available_liquidity_usd": float(vd.get("available_liquidity_usd") or 0),
+    }
     chains_data = [{
         "chain": chain_display, "chain_full": chain_full,
         "tvl_usd": vd["tvl_usd"], "apy": vd["apy"], "pools": 1,
-        "by_asset": {vd["asset"]: {
-            "tvl_usd": vd["tvl_usd"], "apy": vd["apy"], "pools": 1,
-            "share_price_usd": vd.get("share_price_usd"),
-        }},
+        "by_asset": {vd["asset"]: by_asset_info},
     }]
     await store.set_setting(f"protocols.{p.name}.chains", chains_data)
     return {"name": p.name, "tvl_usd": vd["tvl_usd"], "apy": vd["apy"],
@@ -75,7 +80,8 @@ async def _refresh_from_reserves(p, store: ConfigStore, storage: Storage,
         pool_id=f"{pool_id_prefix}_{r['asset']}",
         asset=r["asset"], supply_apy=r["apy"], borrow_apy=0,
         total_supply=Decimal(str(r["tvl_usd"])),
-        total_borrow=Decimal("0"), utilization=0,
+        total_borrow=Decimal("0"),
+        utilization=float(r.get("utilization") or 0),
     ) for r in reserves]
     total_tvl = sum((Decimal(str(r["tvl_usd"])) for r in reserves), Decimal("0"))
     stats = ProtocolStats(chain=Chain(p.chain), protocol=p.name,
@@ -127,7 +133,8 @@ async def refresh_jupiter(p, store: ConfigStore, storage: Storage) -> dict | Non
         p, store, storage, reserves,
         chain_short="SOL", chain_full="Solana", source="Jupiter Lend API",
         pool_id_prefix="jupiter_lend",
-        asset_extra_keys=("withdrawable_ratio", "available_liquidity_usd"))
+        asset_extra_keys=("utilization", "withdrawable_ratio",
+                          "available_liquidity_usd"))
 
 
 async def _refresh_from_multi_chain(p, store: ConfigStore, storage: Storage,
@@ -143,9 +150,11 @@ async def _refresh_from_multi_chain(p, store: ConfigStore, storage: Storage,
     for asset, info in primary_entry.get("by_asset", {}).items():
         pools.append(PoolStats(
             pool_id=f"{pool_id_prefix}_{primary_short}_{asset}",
-            asset=asset, supply_apy=info["apy"], borrow_apy=0,
+            asset=asset, supply_apy=info["apy"],
+            borrow_apy=float(info.get("borrow_apy") or 0),
             total_supply=Decimal(str(info["tvl_usd"])),
-            total_borrow=Decimal("0"), utilization=0))
+            total_borrow=Decimal("0"),
+            utilization=float(info.get("utilization") or 0)))
         total_tvl += Decimal(str(info["tvl_usd"]))
     stats = ProtocolStats(chain=Chain(p.chain), protocol=p.name,
         tvl_usd=total_tvl, pools=pools, updated_at=_now())
@@ -199,7 +208,12 @@ async def refresh_sky(p, store: ConfigStore, storage: Storage) -> dict | None:
         "chain": "ETH", "chain_full": "Ethereum",
         "tvl_usd": sky["tvl_usd"], "apy": sky["apy"], "pools": 1,
         "by_asset": {sky["asset"]: {
-            "apy": sky["apy"], "tvl_usd": sky["tvl_usd"], "pools": 1}},
+            "apy": sky["apy"], "tvl_usd": sky["tvl_usd"], "pools": 1,
+            # sUSDS redeems 1:1 against USDS via SSR at any time — no utilization.
+            "utilization": 0.0,
+            "withdrawable_ratio": 1.0,
+            "available_liquidity_usd": sky["tvl_usd"],
+        }},
     }]
     await store.set_setting(f"protocols.{p.name}.chains", chains_data)
     return {"name": p.name, "tvl_usd": sky["tvl_usd"], "apy": sky["apy"],

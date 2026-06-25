@@ -49,5 +49,6 @@ async def fetch_jupiter_lend_stable_reserves() -> list[dict]:
             "asset": symbol, "apy": apy_bps / 100, "tvl_usd": tvl_usd,
             "withdrawable_ratio": withdrawable_ratio,
             "available_liquidity_usd": withdrawable_usd,
+            "utilization": max(0.0, 1.0 - withdrawable_ratio),
         })
     return result
