@@ -6,6 +6,7 @@ Single-process tool — FastAPI + APScheduler run inside one Python process at p
 
 ```bash
 uv sync
+uv run playwright install chromium   # for /api/comparison/send-telegram screenshot
 uv run python -m stake_watch.main
 ```
 

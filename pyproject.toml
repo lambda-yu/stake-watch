@@ -9,6 +9,7 @@ dependencies = [
     "fastapi>=0.137.0",
     "greenlet>=3.5.1",
     "httpx>=0.28.1",
+    "playwright>=1.50.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.1",
     "python-dotenv>=1.2.2",

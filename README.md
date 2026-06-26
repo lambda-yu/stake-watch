@@ -27,6 +27,9 @@ Personal cross-chain DeFi yield monitoring and risk alerting tool. Tracks 10 len
 # Install Python deps
 uv sync
 
+# One-time: install headless Chromium for "推送到 Telegram" screenshot button
+uv run playwright install chromium
+
 # Install frontend deps
 cd frontend && npm install && cd ..
 

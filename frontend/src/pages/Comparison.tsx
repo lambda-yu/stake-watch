@@ -42,6 +42,10 @@ export function Comparison() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshNote, setRefreshNote] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendNote, setSendNote] = useState<string | null>(null);
+  const [screenshotUrl, setScreenshotUrl] = useState<string>('http://localhost:5173');
+  const [showScreenshotConfig, setShowScreenshotConfig] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [filterAsset, setFilterAsset] = useState<string>('all');
   const [filterChain, setFilterChain] = useState<string>('all');
@@ -70,7 +74,39 @@ export function Comparison() {
     }
   };
 
-  useEffect(() => { reload(); }, []);
+  useEffect(() => {
+    reload();
+    api.comparison.screenshotConfig()
+      .then(r => setScreenshotUrl(r.frontend_url))
+      .catch(() => {});
+  }, []);
+
+  const sendTelegram = async () => {
+    setSending(true);
+    setSendNote(null);
+    try {
+      const r = await api.comparison.sendTelegram();
+      if (r.success) {
+        const kb = r.bytes ? ` (${(r.bytes / 1024).toFixed(0)}KB)` : '';
+        setSendNote(`✓ 已推送${kb}`);
+      } else {
+        setSendNote(`✗ ${r.error || '推送失败'}`);
+      }
+    } catch (e: any) {
+      setSendNote(`✗ ${e.message}`);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const saveScreenshotUrl = async (url: string) => {
+    try {
+      const r = await api.comparison.updateScreenshotConfig({ frontend_url: url });
+      setScreenshotUrl(r.frontend_url);
+    } catch (e: any) {
+      setSendNote(`✗ 配置保存失败: ${e.message}`);
+    }
+  };
 
   const filtered = useMemo(() => {
     let r = rows;
@@ -102,10 +138,25 @@ export function Comparison() {
             按 综合选择分 = 风险调整收益 × 流动性系数 × 稳定币安全系数 排序
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {refreshNote && (
             <span className="text-xs text-gray-400">{refreshNote}</span>
           )}
+          {sendNote && (
+            <span className={`text-xs ${sendNote.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>
+              {sendNote}
+            </span>
+          )}
+          <button onClick={() => setShowScreenshotConfig(s => !s)}
+            title="配置截图所用的前端 URL"
+            className="text-gray-400 hover:text-gray-200 text-xs px-2 py-2">
+            ⚙
+          </button>
+          <button onClick={sendTelegram} disabled={sending || loading || refreshing}
+            title="截当前页面发送到 Telegram"
+            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-700 text-white px-4 py-2 rounded text-sm">
+            {sending ? '推送中... (~10s)' : '📷 推送到 Telegram'}
+          </button>
           <button onClick={reload} disabled={loading || refreshing}
             className="bg-gray-800 hover:bg-gray-700 disabled:bg-gray-900 text-gray-200 border border-gray-700 px-3 py-2 rounded text-sm">
             {loading ? '加载中...' : '重新加载'}
@@ -117,6 +168,24 @@ export function Comparison() {
           </button>
         </div>
       </div>
+
+      {showScreenshotConfig && (
+        <div className="bg-gray-900 border border-gray-800 rounded p-3 mb-4 text-sm">
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="text-gray-400 whitespace-nowrap">截图前端 URL</label>
+            <input
+              value={screenshotUrl}
+              onChange={e => setScreenshotUrl(e.target.value)}
+              onBlur={() => saveScreenshotUrl(screenshotUrl)}
+              placeholder="http://localhost:5173"
+              className="flex-1 min-w-[300px] bg-gray-800 border border-gray-700 rounded px-2 py-1 font-mono text-xs"
+            />
+            <span className="text-xs text-gray-500">
+              指向运行中的 Vite dev / 静态站点根；服务端 headless Chromium 会访问此 URL + /comparison
+            </span>
+          </div>
+        </div>
+      )}
 
       <div className="bg-gray-900 rounded-lg p-3 mb-4 flex gap-3 flex-wrap text-sm items-center">
         <div className="flex items-center gap-2">

@@ -9,6 +9,7 @@ Produces a (protocol × chain × asset) flat list with:
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from stake_watch.api.deps import get_config_store, get_storage
 from stake_watch.risk.risk_model import evaluate, ASSET_DEFAULT_STABLE
@@ -140,3 +141,29 @@ async def get_comparison(store: ConfigStore = Depends(get_config_store),
     rows.sort(key=lambda x: -x["composite_score"])
     return {"rows": rows, "count": len(rows),
             "peer_median_apy": {a: round(v, 3) for a, v in peer_median.items()}}
+
+
+@router.post("/send-telegram")
+async def send_telegram_screenshot(storage: Storage = Depends(get_storage)):
+    """Capture the /comparison page from the configured frontend URL and
+    push as a Telegram photo. Returns {"success": bool, "error"?: str}."""
+    from stake_watch.alerts.comparison_screenshot import send_comparison_screenshot
+    return await send_comparison_screenshot(storage)
+
+
+class ScreenshotConfig(BaseModel):
+    frontend_url: str | None = None
+
+
+@router.get("/screenshot-config")
+async def get_screenshot_config(store: ConfigStore = Depends(get_config_store)):
+    url = await store.get_setting("screenshot.frontend_url") or "http://localhost:5173"
+    return {"frontend_url": url}
+
+
+@router.put("/screenshot-config")
+async def update_screenshot_config(data: ScreenshotConfig,
+                                     store: ConfigStore = Depends(get_config_store)):
+    if data.frontend_url is not None:
+        await store.set_setting("screenshot.frontend_url", data.frontend_url.rstrip("/"))
+    return await get_screenshot_config(store)

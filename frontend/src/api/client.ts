@@ -80,6 +80,12 @@ export const api = {
   },
   comparison: {
     get: () => request<{ rows: any[]; count: number }>('/comparison'),
+    sendTelegram: () => request<{ success: boolean; error?: string; bytes?: number }>(
+      '/comparison/send-telegram', { method: 'POST' }),
+    screenshotConfig: () => request<{ frontend_url: string }>('/comparison/screenshot-config'),
+    updateScreenshotConfig: (data: { frontend_url?: string }) =>
+      request<{ frontend_url: string }>('/comparison/screenshot-config',
+        { method: 'PUT', body: JSON.stringify(data) }),
   },
   stablecoins: {
     snapshots: () => request<any[]>('/stablecoins'),
