@@ -81,6 +81,7 @@ class CollectionRunner:
 
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 class ScheduledRunner:
@@ -90,6 +91,7 @@ class ScheduledRunner:
                  protocols_report_interval: int = 14400,
                  snapshots_interval: int = 14400,
                  risk_monitor_interval: int = 3600,
+                 screenshot_daily: dict | None = None,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
         self.position_interval = position_interval
@@ -100,6 +102,7 @@ class ScheduledRunner:
         self.protocols_report_interval = protocols_report_interval
         self.snapshots_interval = snapshots_interval
         self.risk_monitor_interval = risk_monitor_interval
+        self.screenshot_daily = screenshot_daily or {}
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
 
@@ -144,6 +147,19 @@ class ScheduledRunner:
                 logger.info(f"Risk monitor emitted {n} alert(s)")
         except Exception as e:
             logger.error(f"Risk monitor failed: {e}")
+
+    async def _send_comparison_screenshot(self):
+        if not self.storage:
+            return
+        from stake_watch.alerts.comparison_screenshot import send_comparison_screenshot
+        try:
+            r = await send_comparison_screenshot(self.storage)
+            if r.get("success"):
+                logger.info(f"Comparison screenshot pushed ({r.get('bytes', 0)} bytes)")
+            else:
+                logger.warning(f"Scheduled comparison screenshot failed: {r.get('error')}")
+        except Exception as e:
+            logger.error(f"Comparison screenshot job failed: {e}")
 
     async def _refresh_dex_liquidity(self):
         try:
@@ -238,6 +254,22 @@ class ScheduledRunner:
                 id="risk_monitor", name="Risk monitor + alerts",
                 replace_existing=True)
             logger.info(f"Risk monitor every {self.risk_monitor_interval}s")
+
+        sd = self.screenshot_daily
+        if sd.get("enabled") and self.storage:
+            hour = int(sd.get("hour", 9))
+            minute = int(sd.get("minute", 0))
+            tz_offset = int(sd.get("tz_offset", 8))
+            # APScheduler supports tzinfo on triggers; pass a fixed-offset tz.
+            from datetime import timedelta, timezone as _tz
+            tz = _tz(timedelta(hours=tz_offset))
+            self._scheduler.add_job(
+                self._send_comparison_screenshot,
+                trigger=CronTrigger(hour=hour, minute=minute, timezone=tz),
+                id="screenshot_daily", name="Daily comparison screenshot",
+                replace_existing=True,
+            )
+            logger.info(f"Comparison screenshot daily at {hour:02d}:{minute:02d} UTC{tz_offset:+d}")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")

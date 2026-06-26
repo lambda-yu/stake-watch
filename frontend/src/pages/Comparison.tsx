@@ -45,6 +45,9 @@ export function Comparison() {
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNote] = useState<string | null>(null);
   const [screenshotUrl, setScreenshotUrl] = useState<string>('http://localhost:5173');
+  const [dailyEnabled, setDailyEnabled] = useState(false);
+  const [dailyHour, setDailyHour] = useState(9);
+  const [dailyMinute, setDailyMinute] = useState(0);
   const [showScreenshotConfig, setShowScreenshotConfig] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [filterAsset, setFilterAsset] = useState<string>('all');
@@ -77,7 +80,12 @@ export function Comparison() {
   useEffect(() => {
     reload();
     api.comparison.screenshotConfig()
-      .then(r => setScreenshotUrl(r.frontend_url))
+      .then(r => {
+        setScreenshotUrl(r.frontend_url);
+        setDailyEnabled(r.daily_enabled);
+        setDailyHour(r.daily_hour);
+        setDailyMinute(r.daily_minute);
+      })
       .catch(() => {});
   }, []);
 
@@ -103,6 +111,22 @@ export function Comparison() {
     try {
       const r = await api.comparison.updateScreenshotConfig({ frontend_url: url });
       setScreenshotUrl(r.frontend_url);
+    } catch (e: any) {
+      setSendNote(`✗ 配置保存失败: ${e.message}`);
+    }
+  };
+
+  const saveDailyConfig = async (patch: {
+    daily_enabled?: boolean;
+    daily_hour?: number;
+    daily_minute?: number;
+  }) => {
+    try {
+      const r = await api.comparison.updateScreenshotConfig(patch);
+      setDailyEnabled(r.daily_enabled);
+      setDailyHour(r.daily_hour);
+      setDailyMinute(r.daily_minute);
+      setSendNote('✓ 已保存，重启服务生效');
     } catch (e: any) {
       setSendNote(`✗ 配置保存失败: ${e.message}`);
     }
@@ -170,7 +194,7 @@ export function Comparison() {
       </div>
 
       {showScreenshotConfig && (
-        <div className="bg-gray-900 border border-gray-800 rounded p-3 mb-4 text-sm">
+        <div className="bg-gray-900 border border-gray-800 rounded p-3 mb-4 text-sm space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             <label className="text-gray-400 whitespace-nowrap">截图前端 URL</label>
             <input
@@ -181,8 +205,50 @@ export function Comparison() {
               className="flex-1 min-w-[300px] bg-gray-800 border border-gray-700 rounded px-2 py-1 font-mono text-xs"
             />
             <span className="text-xs text-gray-500">
-              指向运行中的 Vite dev / 静态站点根；服务端 headless Chromium 会访问此 URL + /comparison
+              指向运行中的 Vite dev / 静态站点根
             </span>
+          </div>
+
+          <div className="border-t border-gray-800 pt-3 space-y-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dailyEnabled}
+                  onChange={e => saveDailyConfig({ daily_enabled: e.target.checked })}
+                  className="w-4 h-4 rounded bg-gray-800 border-gray-600"
+                />
+                <span className="text-gray-300">启用每日定时推送</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <label className="text-gray-400 text-xs">每天</label>
+                <select
+                  value={dailyHour}
+                  onChange={e => saveDailyConfig({ daily_hour: Number(e.target.value) })}
+                  className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                >
+                  {Array.from({ length: 24 }, (_, i) => (
+                    <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span className="text-gray-400">:</span>
+                <select
+                  value={dailyMinute}
+                  onChange={e => saveDailyConfig({ daily_minute: Number(e.target.value) })}
+                  className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                >
+                  {[0, 15, 30, 45].map(m => (
+                    <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>
+                  ))}
+                </select>
+                <span className="text-gray-500 text-xs">
+                  使用设置页时区（默认 UTC+8）
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              保存后需重启服务生效；定时任务到点会截图并推送到已配置的 Telegram。
+            </p>
           </div>
         </div>
       )}

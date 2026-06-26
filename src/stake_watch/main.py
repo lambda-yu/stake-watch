@@ -76,6 +76,13 @@ async def main():
         protocols_report_interval = 0
     snapshots_interval = await config_store.get_setting("protocols.snapshots_interval") or 14400
     risk_monitor_interval = await config_store.get_setting("risk_monitor.interval") or 3600
+    tz_offset = await config_store.get_setting("display.timezone_offset") or 8
+    screenshot_daily = {
+        "enabled": bool(await config_store.get_setting("screenshot.daily_enabled")),
+        "hour": int(await config_store.get_setting("screenshot.daily_hour") or 9),
+        "minute": int(await config_store.get_setting("screenshot.daily_minute") or 0),
+        "tz_offset": int(tz_offset),
+    }
 
     scheduled = ScheduledRunner(
         collection_runner=runner,
@@ -87,6 +94,7 @@ async def main():
         protocols_report_interval=protocols_report_interval,
         snapshots_interval=snapshots_interval,
         risk_monitor_interval=risk_monitor_interval,
+        screenshot_daily=screenshot_daily,
         storage=storage,
     )
 

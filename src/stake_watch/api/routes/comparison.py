@@ -153,12 +153,23 @@ async def send_telegram_screenshot(storage: Storage = Depends(get_storage)):
 
 class ScreenshotConfig(BaseModel):
     frontend_url: str | None = None
+    daily_enabled: bool | None = None
+    daily_hour: int | None = None
+    daily_minute: int | None = None
 
 
 @router.get("/screenshot-config")
 async def get_screenshot_config(store: ConfigStore = Depends(get_config_store)):
     url = await store.get_setting("screenshot.frontend_url") or "http://localhost:5173"
-    return {"frontend_url": url}
+    enabled = await store.get_setting("screenshot.daily_enabled")
+    hour = await store.get_setting("screenshot.daily_hour")
+    minute = await store.get_setting("screenshot.daily_minute")
+    return {
+        "frontend_url": url,
+        "daily_enabled": bool(enabled),
+        "daily_hour": int(hour) if hour is not None else 9,
+        "daily_minute": int(minute) if minute is not None else 0,
+    }
 
 
 @router.put("/screenshot-config")
@@ -166,4 +177,12 @@ async def update_screenshot_config(data: ScreenshotConfig,
                                      store: ConfigStore = Depends(get_config_store)):
     if data.frontend_url is not None:
         await store.set_setting("screenshot.frontend_url", data.frontend_url.rstrip("/"))
+    if data.daily_enabled is not None:
+        await store.set_setting("screenshot.daily_enabled", bool(data.daily_enabled))
+    if data.daily_hour is not None:
+        await store.set_setting("screenshot.daily_hour",
+                                  max(0, min(23, int(data.daily_hour))))
+    if data.daily_minute is not None:
+        await store.set_setting("screenshot.daily_minute",
+                                  max(0, min(59, int(data.daily_minute))))
     return await get_screenshot_config(store)
