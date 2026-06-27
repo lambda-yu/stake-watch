@@ -126,7 +126,13 @@ export function Comparison() {
       setDailyEnabled(r.daily_enabled);
       setDailyHour(r.daily_hour);
       setDailyMinute(r.daily_minute);
-      setSendNote('✓ 已保存，重启服务生效');
+      const hr = r.hot_reload;
+      const msg = hr === 'scheduled' ? '✓ 已保存，定时任务已注册'
+                : hr === 'removed' ? '✓ 已保存，定时任务已停用'
+                : hr === 'disabled (no prior job)' ? '✓ 已保存'
+                : hr ? `✓ 已保存（${hr}）`
+                : '✓ 已保存';
+      setSendNote(msg);
     } catch (e: any) {
       setSendNote(`✗ 配置保存失败: ${e.message}`);
     }
@@ -247,7 +253,7 @@ export function Comparison() {
               </div>
             </div>
             <p className="text-xs text-gray-500">
-              保存后需重启服务生效；定时任务到点会截图并推送到已配置的 Telegram。
+              修改立即生效（无需重启）；到点会截图并推送到已配置的 Telegram。
             </p>
           </div>
         </div>

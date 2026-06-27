@@ -99,6 +99,7 @@ export const api = {
         daily_enabled: boolean;
         daily_hour: number;
         daily_minute: number;
+        hot_reload?: string;
       }>('/comparison/screenshot-config',
         { method: 'PUT', body: JSON.stringify(data) }),
   },

@@ -257,22 +257,44 @@ class ScheduledRunner:
 
         sd = self.screenshot_daily
         if sd.get("enabled") and self.storage:
-            hour = int(sd.get("hour", 9))
-            minute = int(sd.get("minute", 0))
-            tz_offset = int(sd.get("tz_offset", 8))
-            # APScheduler supports tzinfo on triggers; pass a fixed-offset tz.
-            from datetime import timedelta, timezone as _tz
-            tz = _tz(timedelta(hours=tz_offset))
-            self._scheduler.add_job(
-                self._send_comparison_screenshot,
-                trigger=CronTrigger(hour=hour, minute=minute, timezone=tz),
-                id="screenshot_daily", name="Daily comparison screenshot",
-                replace_existing=True,
+            self.apply_screenshot_daily_config(
+                enabled=True,
+                hour=int(sd.get("hour", 9)),
+                minute=int(sd.get("minute", 0)),
+                tz_offset=int(sd.get("tz_offset", 8)),
             )
-            logger.info(f"Comparison screenshot daily at {hour:02d}:{minute:02d} UTC{tz_offset:+d}")
 
         self._scheduler.start()
         logger.info(f"Scheduler started: positions every {self.position_interval}s")
+
+    def apply_screenshot_daily_config(self, *, enabled: bool, hour: int,
+                                        minute: int, tz_offset: int) -> str:
+        """Hot-reload the daily screenshot cron job. Returns a status string.
+
+        Safe to call before or after _scheduler.start(). When `enabled` is False,
+        any existing screenshot_daily job is removed.
+        """
+        self.screenshot_daily = {"enabled": enabled, "hour": hour,
+                                  "minute": minute, "tz_offset": tz_offset}
+        if not self.storage:
+            return "no storage; skipped"
+        existing = self._scheduler.get_job("screenshot_daily")
+        if not enabled:
+            if existing:
+                self._scheduler.remove_job("screenshot_daily")
+                logger.info("Daily comparison screenshot job removed")
+                return "removed"
+            return "disabled (no prior job)"
+        from datetime import timedelta, timezone as _tz
+        tz = _tz(timedelta(hours=tz_offset))
+        self._scheduler.add_job(
+            self._send_comparison_screenshot,
+            trigger=CronTrigger(hour=hour, minute=minute, timezone=tz),
+            id="screenshot_daily", name="Daily comparison screenshot",
+            replace_existing=True,
+        )
+        logger.info(f"Comparison screenshot daily at {hour:02d}:{minute:02d} UTC{tz_offset:+d}")
+        return "scheduled"
 
     def stop(self):
         self._scheduler.shutdown(wait=False)

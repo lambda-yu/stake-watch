@@ -185,4 +185,31 @@ async def update_screenshot_config(data: ScreenshotConfig,
     if data.daily_minute is not None:
         await store.set_setting("screenshot.daily_minute",
                                   max(0, min(59, int(data.daily_minute))))
-    return await get_screenshot_config(store)
+
+    # Hot-reload the scheduler so no restart is needed for the new schedule.
+    applied = None
+    daily_fields_touched = (data.daily_enabled is not None
+                             or data.daily_hour is not None
+                             or data.daily_minute is not None)
+    if daily_fields_touched:
+        from stake_watch.api.deps import get_scheduler
+        sched = get_scheduler()
+        if sched is not None:
+            current = await get_screenshot_config(store)
+            tz_offset = await store.get_setting("display.timezone_offset") or 8
+            try:
+                applied = sched.apply_screenshot_daily_config(
+                    enabled=bool(current["daily_enabled"]),
+                    hour=int(current["daily_hour"]),
+                    minute=int(current["daily_minute"]),
+                    tz_offset=int(tz_offset),
+                )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"hot-reload of screenshot_daily failed: {e}")
+                applied = f"error: {e}"
+    body = await get_screenshot_config(store)
+    if applied is not None:
+        body["hot_reload"] = applied
+    return body

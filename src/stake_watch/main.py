@@ -105,6 +105,11 @@ async def main():
 
     scheduled.start()
 
+    # Expose the running scheduler so API routes can hot-reload jobs
+    # (e.g. the daily screenshot cron) without restarting the process.
+    from stake_watch.api import deps
+    deps.init_scheduler(scheduled)
+
     import uvicorn
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
