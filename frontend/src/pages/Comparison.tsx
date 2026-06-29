@@ -211,7 +211,9 @@ export function Comparison() {
               className="flex-1 min-w-[300px] bg-gray-800 border border-gray-700 rounded px-2 py-1 font-mono text-xs"
             />
             <span className="text-xs text-gray-500">
-              指向运行中的 Vite dev / 静态站点根
+              Vite dev 用 <code className="text-gray-300">http://localhost:5173</code>；
+              docker compose 部署用服务名 <code className="text-gray-300">http://frontend</code>（容器互访）；
+              填宿主 IP+端口在 docker 网络里通常不通。
             </span>
           </div>
 

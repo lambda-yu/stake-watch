@@ -44,13 +44,18 @@ async def capture_url_screenshot(url: str, *,
                 device_scale_factor=2,  # crisp on retina/Telegram
             )
             page = await context.new_page()
-            await page.goto(url, wait_until="networkidle", timeout=timeout_ms)
+            # `networkidle` is fragile for SPAs (any lingering XHR keeps it
+            # waiting forever). DOM-ready + an explicit selector is faster
+            # and more reliable for our use case.
+            await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
             if wait_selector:
                 try:
                     await page.wait_for_selector(wait_selector,
                                                   timeout=timeout_ms // 2)
                 except Exception as e:
                     logger.warning(f"selector {wait_selector!r} not found before snap: {e}")
+            # Brief settle so animations / late-rendered cells stabilise.
+            await page.wait_for_timeout(500)
             png = await page.screenshot(full_page=full_page, type="png")
             return png
         finally:

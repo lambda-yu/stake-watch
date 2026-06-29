@@ -18,6 +18,7 @@ async def test_capture_returns_png_bytes_from_mocked_playwright():
     page = MagicMock()
     page.goto = AsyncMock()
     page.wait_for_selector = AsyncMock()
+    page.wait_for_timeout = AsyncMock()
     page.screenshot = AsyncMock(return_value=b"\x89PNG\r\n\x1a\nFAKE")
 
     context = MagicMock()
@@ -56,6 +57,7 @@ async def test_capture_tolerates_selector_timeout():
     page = MagicMock()
     page.goto = AsyncMock()
     page.wait_for_selector = AsyncMock(side_effect=Exception("timeout"))
+    page.wait_for_timeout = AsyncMock()
     page.screenshot = AsyncMock(return_value=b"PNGDATA")
 
     context = MagicMock()
