@@ -12,7 +12,7 @@ services:
       - path: .env
         required: false
     environment:
-      - DATABASE_URL=sqlite:///data/stake_watch.db
+      - DATABASE_URL=sqlite:////data/stake_watch.db
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/status')"]
       interval: 30s

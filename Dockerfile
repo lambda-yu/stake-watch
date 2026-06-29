@@ -51,7 +51,7 @@ COPY src/ src/
 COPY config/ config/
 RUN uv sync --frozen --no-dev
 
-ENV DATABASE_URL=sqlite:///data/stake_watch.db
+ENV DATABASE_URL=sqlite:////data/stake_watch.db
 
 EXPOSE 8000
 
