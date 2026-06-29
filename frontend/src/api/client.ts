@@ -110,9 +110,24 @@ export const api = {
     updateReserves: (token: string, data: any) =>
       request<any>(`/stablecoins/reserves/${token}`, { method: 'PUT', body: JSON.stringify(data) }),
     fetchReserves: () => request<any>('/stablecoins/reserves/fetch', { method: 'POST' }),
-    reportConfig: () => request<any>('/stablecoins/report-config'),
-    updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
-      request<any>('/stablecoins/report-config', { method: 'PUT', body: JSON.stringify(data) }),
+    reportConfig: () => request<{
+      interval: number;
+      enabled: boolean;
+      dex_liquidity_interval?: number;
+      reserves_fetch_interval?: number;
+    }>('/stablecoins/report-config'),
+    updateReportConfig: (data: {
+      interval?: number;
+      enabled?: boolean;
+      dex_liquidity_interval?: number;
+      reserves_fetch_interval?: number;
+    }) =>
+      request<{
+        interval: number;
+        enabled: boolean;
+        dex_liquidity_interval?: number;
+        reserves_fetch_interval?: number;
+      }>('/stablecoins/report-config', { method: 'PUT', body: JSON.stringify(data) }),
     sendReport: () => request<any>('/stablecoins/report/send', { method: 'POST' }),
     collect: () => request<any>('/stablecoins/collect', { method: 'POST' }),
   },

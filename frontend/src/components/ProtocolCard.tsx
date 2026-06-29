@@ -37,7 +37,6 @@ type Protocol = {
   usdc_tvl?: number | null;
   usdt_apy?: number | null;
   usdt_tvl?: number | null;
-  primary_asset?: string | null;
   primary_asset_apy?: number | null;
   primary_asset_tvl?: number | null;
   defillama_slug?: string | null;
@@ -93,14 +92,6 @@ function fmtTime(iso: string | null | undefined): string {
   if (diffSec < 86400) return `${Math.floor(diffSec/3600)}小时前`;
   return d.toLocaleString('zh-CN', { hour12: false });
 }
-
-const DIM_LABELS: { key: string; label: string }[] = [
-  { key: 'contract',   label: '合约' },
-  { key: 'governance', label: '治理' },
-  { key: 'liquidity',  label: '流动性' },
-  { key: 'oracle',     label: '预言机' },
-  { key: 'collateral', label: '抵押品' },
-];
 
 function formatTvl(v: number): string {
   if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;

@@ -25,7 +25,12 @@ export function Stablecoins() {
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [riskConfig, setRiskConfig] = useState<any>({});
   const [intervals, setIntervals] = useState<any>({});
-  const [reportConfig, setReportConfig] = useState<{ interval: number; enabled: boolean }>({ interval: 3600, enabled: true });
+  const [reportConfig, setReportConfig] = useState<{
+    interval: number;
+    enabled: boolean;
+    dex_liquidity_interval?: number;
+    reserves_fetch_interval?: number;
+  }>({ interval: 3600, enabled: true });
   const [sendingReport, setSendingReport] = useState(false);
   const [reportResult, setReportResult] = useState<{ success: boolean; error?: string } | null>(null);
 
