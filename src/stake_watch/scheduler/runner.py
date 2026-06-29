@@ -181,15 +181,19 @@ class ScheduledRunner:
 
             tether = await fetch_tether_reserves()
             if tether:
+                today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 await config_store.set_setting("reserves.usdt.total_reserves", float(tether["total_assets"]))
                 await config_store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
+                await config_store.set_setting("reserves.usdt.report_date", today)
                 await config_store.set_setting("reserves.usdt.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
             circle = await fetch_circle_supply()
             if circle:
                 supply = float(circle["total_supply"])
+                today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 await config_store.set_setting("reserves.usdc.total_reserves", supply)
                 await config_store.set_setting("reserves.usdc.total_supply_live", supply)
+                await config_store.set_setting("reserves.usdc.report_date", today)
                 await config_store.set_setting("reserves.usdc.last_fetched", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
             # USD0/USD1 via DefiLlama supply

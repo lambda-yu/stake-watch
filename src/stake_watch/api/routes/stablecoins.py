@@ -77,10 +77,12 @@ async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
         assets = float(tether["total_assets"])
         liabilities = float(tether["total_liabilities"])
         equity = float(tether["equity"])
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         await store.set_setting("reserves.usdt.total_reserves", assets)
         await store.set_setting("reserves.usdt.total_liabilities", liabilities)
         await store.set_setting("reserves.usdt.equity", equity)
         await store.set_setting("reserves.usdt.coverage_ratio", tether["coverage_ratio"])
+        await store.set_setting("reserves.usdt.report_date", today)
         await store.set_setting("reserves.usdt.last_fetched",
             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
         await store.set_setting("reserves.usdt.composition", {
@@ -101,8 +103,10 @@ async def fetch_reserves_live(store: ConfigStore = Depends(get_config_store)):
     circle = await fetch_circle_supply()
     if circle:
         supply = float(circle["total_supply"])
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         await store.set_setting("reserves.usdc.total_supply_live", supply)
         await store.set_setting("reserves.usdc.total_reserves", supply)
+        await store.set_setting("reserves.usdc.report_date", today)
         await store.set_setting("reserves.usdc.last_fetched",
             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
         top_chains = sorted(circle.get("chains", {}).items(), key=lambda x: x[1], reverse=True)[:5]
