@@ -9,7 +9,8 @@ services:
       - db-data:/data
       - ./config:/app/config:ro
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DATABASE_URL=sqlite:///data/stake_watch.db
     healthcheck:
