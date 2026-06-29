@@ -2,7 +2,11 @@ FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# Install uv from PyPI rather than `COPY --from=ghcr.io/astral-sh/uv:latest`
+# — ghcr.io is unreachable from many networks (China, restricted VPC) and
+# turns a single image pull into a build-breaking failure. PyPI is mirrored
+# everywhere and Docker Hub already gave us python:3.12-slim.
+RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
