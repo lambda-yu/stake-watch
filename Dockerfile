@@ -8,8 +8,9 @@ WORKDIR /app
 # everywhere and Docker Hub already gave us python:3.12-slim.
 RUN pip install --no-cache-dir uv
 
+# Stage 1: dependency layer (cacheable; only invalidated by lockfile change).
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-install-project
 
 # System libs Playwright Chromium needs + the browser binary itself.
 # Skipping these means the Comparison screenshot button + daily push
@@ -43,8 +44,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && uv run playwright install chromium
 
+# Stage 2: install the project itself. This is what makes `stake_watch.main`
+# importable inside the container; running `uv sync` before src/ existed
+# only installed the dependency tree, never the package.
 COPY src/ src/
 COPY config/ config/
+RUN uv sync --frozen --no-dev
 
 ENV DATABASE_URL=sqlite:///data/stake_watch.db
 
