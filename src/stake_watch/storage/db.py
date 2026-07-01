@@ -267,6 +267,32 @@ class Storage:
             row = result.scalar_one_or_none()
             return row.tvl_usd if row else None
 
+    async def get_apy_tvl_history(self, protocol: str, days: int = 30,
+                                     max_points: int = 500) -> list[dict]:
+        """Return (chain, asset, apy, tvl_usd, created_at) rows for the last
+        `days` days, oldest → newest. Multiple (chain, asset) series come out
+        interleaved; the frontend regroups.
+
+        `max_points` caps the query so extremely long ranges (say 365 days)
+        don't ship megabytes to the browser."""
+        from stake_watch.storage.tables import TvlSnapshotRow
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import select, and_
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TvlSnapshotRow).where(and_(
+                    TvlSnapshotRow.protocol == protocol,
+                    TvlSnapshotRow.created_at >= cutoff,
+                )).order_by(TvlSnapshotRow.created_at.asc()).limit(max_points))
+            rows = result.scalars().all()
+            return [
+                {"chain": r.chain, "asset": r.asset,
+                 "apy": r.apy, "tvl_usd": r.tvl_usd,
+                 "created_at": r.created_at.isoformat() if r.created_at else None}
+                for r in rows
+            ]
+
 
     async def save_vault_share_price(self, vault_address: str, protocol: str, share_price_usd: float):
         from stake_watch.storage.tables import VaultSharePriceRow

@@ -308,6 +308,38 @@ async def reevaluate_protocol(protocol_id: int,
     return _to_dict(p)
 
 
+@router.get("/{protocol_id}/history")
+async def get_protocol_history(protocol_id: int, days: int = 30,
+                                 store: ConfigStore = Depends(get_config_store),
+                                 storage: Storage = Depends(get_storage)):
+    """Return APY / TVL time-series (last `days` days) grouped per (chain, asset).
+
+    Data source: tvl_snapshots — populated by the scheduler's snapshots job
+    every `protocols.snapshots_interval` seconds (default 4h).
+    """
+    p = await store.get_protocol(protocol_id)
+    if not p:
+        return Response(status_code=404)
+    days = max(1, min(int(days), 365))
+    rows = await storage.get_apy_tvl_history(p.name, days=days)
+    # Group by (chain, asset) → list of {t, apy, tvl}
+    series: dict[tuple[str, str], list[dict]] = {}
+    for r in rows:
+        key = (r["chain"], r["asset"])
+        series.setdefault(key, []).append({
+            "t": r["created_at"], "apy": r["apy"], "tvl_usd": r["tvl_usd"],
+        })
+    return {
+        "protocol": p.name,
+        "days": days,
+        "series": [
+            {"chain": chain, "asset": asset, "points": pts}
+            for (chain, asset), pts in series.items()
+        ],
+        "count": sum(len(pts) for pts in series.values()),
+    }
+
+
 @router.get("/{protocol_id}/risk-status")
 async def get_protocol_risk_status(protocol_id: int,
                                     refresh: bool = False,
