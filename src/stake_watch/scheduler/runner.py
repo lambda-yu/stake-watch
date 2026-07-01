@@ -89,6 +89,7 @@ class ScheduledRunner:
                  stats_interval: int = 900, stablecoin_report_interval: int = 3600,
                  dex_liquidity_interval: int = 300, reserves_fetch_interval: int = 21600,
                  protocols_report_interval: int = 14400,
+                 protocols_refresh_interval: int = 14400,
                  snapshots_interval: int = 14400,
                  risk_monitor_interval: int = 3600,
                  screenshot_daily: dict | None = None,
@@ -100,6 +101,7 @@ class ScheduledRunner:
         self.dex_liquidity_interval = dex_liquidity_interval
         self.reserves_fetch_interval = reserves_fetch_interval
         self.protocols_report_interval = protocols_report_interval
+        self.protocols_refresh_interval = protocols_refresh_interval
         self.snapshots_interval = snapshots_interval
         self.risk_monitor_interval = risk_monitor_interval
         self.screenshot_daily = screenshot_daily or {}
@@ -120,6 +122,26 @@ class ScheduledRunner:
             return
         from stake_watch.alerts.protocols_report import send_protocols_report
         await send_protocols_report(self.storage)
+
+    async def _refresh_protocols(self):
+        """Standalone refresh: pulls live APY/TVL for every enabled protocol
+        and writes protocols.{name}.chains — powers the Comparison page.
+
+        Independent from the Telegram protocols_report job so users can
+        refresh data at a different (usually shorter) cadence than push.
+        """
+        if not self.storage:
+            return
+        from stake_watch.api.routes.protocols import refresh_all_protocols
+        from stake_watch.storage.config_store import ConfigStore
+        try:
+            store = ConfigStore(self.storage._session_factory)
+            result = await refresh_all_protocols(store=store, storage=self.storage)
+            ok = len(result.get("refreshed") or [])
+            failed = len(result.get("failed") or [])
+            logger.info(f"Auto-refresh: {ok} refreshed, {failed} failed")
+        except Exception as e:
+            logger.error(f"Auto-refresh failed: {e}")
 
     async def _write_snapshots(self):
         if not self.storage:
@@ -239,6 +261,10 @@ class ScheduledRunner:
                 id="reserves_fetch", name="Reserves fetch", replace_existing=True)
             logger.info(f"Reserves fetch every {self.reserves_fetch_interval}s")
 
+        if self.protocols_refresh_interval > 0 and self.storage:
+            self.apply_protocols_refresh_config(
+                interval=self.protocols_refresh_interval)
+
         if self.protocols_report_interval > 0 and self.storage:
             self._scheduler.add_job(self._send_protocols_report,
                 trigger=IntervalTrigger(seconds=self.protocols_report_interval),
@@ -298,6 +324,28 @@ class ScheduledRunner:
             replace_existing=True,
         )
         logger.info(f"Comparison screenshot daily at {hour:02d}:{minute:02d} UTC{tz_offset:+d}")
+        return "scheduled"
+
+    def apply_protocols_refresh_config(self, *, interval: int) -> str:
+        """Hot-reload the auto-refresh interval job. `interval <= 0` disables it.
+        Returns a status string ("scheduled" / "removed" / "disabled")."""
+        self.protocols_refresh_interval = int(interval)
+        if not self.storage:
+            return "no storage; skipped"
+        existing = self._scheduler.get_job("protocols_refresh")
+        if interval <= 0:
+            if existing:
+                self._scheduler.remove_job("protocols_refresh")
+                logger.info("Protocols auto-refresh job removed")
+                return "removed"
+            return "disabled"
+        self._scheduler.add_job(
+            self._refresh_protocols,
+            trigger=IntervalTrigger(seconds=int(interval)),
+            id="protocols_refresh", name="Protocols auto-refresh",
+            replace_existing=True,
+        )
+        logger.info(f"Protocols auto-refresh every {interval}s")
         return "scheduled"
 
     def stop(self):

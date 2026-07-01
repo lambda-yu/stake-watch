@@ -74,6 +74,10 @@ async def main():
     protocols_report_enabled = await config_store.get_setting("protocols.report_enabled")
     if protocols_report_enabled is False:
         protocols_report_interval = 0
+    protocols_refresh_interval = await config_store.get_setting("protocols.refresh_interval") or 3600
+    protocols_refresh_enabled = await config_store.get_setting("protocols.refresh_enabled")
+    if protocols_refresh_enabled is False:
+        protocols_refresh_interval = 0
     snapshots_interval = await config_store.get_setting("protocols.snapshots_interval") or 14400
     risk_monitor_interval = await config_store.get_setting("risk_monitor.interval") or 3600
     tz_offset = await config_store.get_setting("display.timezone_offset") or 8
@@ -92,6 +96,7 @@ async def main():
         dex_liquidity_interval=dex_interval,
         reserves_fetch_interval=reserves_interval,
         protocols_report_interval=protocols_report_interval,
+        protocols_refresh_interval=protocols_refresh_interval,
         snapshots_interval=snapshots_interval,
         risk_monitor_interval=risk_monitor_interval,
         screenshot_daily=screenshot_daily,

@@ -38,12 +38,33 @@ export function Protocols() {
   const [reportConfig, setReportConfig] = useState<{ interval: number; enabled: boolean }>({ interval: 14400, enabled: true });
   const [sendingReport, setSendingReport] = useState(false);
   const [reportResult, setReportResult] = useState<{ success: boolean; error?: string } | null>(null);
+  const [refreshConfig, setRefreshConfig] = useState<{ interval: number; enabled: boolean }>({ interval: 3600, enabled: true });
+  const [refreshConfigNote, setRefreshConfigNote] = useState<string | null>(null);
 
   const reload = async () => { try { setProtocols(await api.protocols.list()); } catch {} };
   useEffect(() => {
     reload();
     api.protocols.reportConfig().then(setReportConfig).catch(() => {});
+    api.protocols.refreshConfig().then(setRefreshConfig).catch(() => {});
   }, []);
+
+  const saveRefreshConfig = async (patch: { interval?: number; enabled?: boolean }) => {
+    setRefreshConfigNote(null);
+    try {
+      const r = await api.protocols.updateRefreshConfig(patch);
+      setRefreshConfig({ interval: r.interval, enabled: r.enabled });
+      const hr = r.hot_reload;
+      setRefreshConfigNote(
+        hr === 'scheduled' ? '✓ 已保存，自动刷新已启用'
+        : hr === 'removed' ? '✓ 已保存，自动刷新已停用'
+        : hr === 'disabled' ? '✓ 已保存'
+        : hr ? `✓ 已保存（${hr}）`
+        : '✓ 已保存'
+      );
+    } catch (e: any) {
+      setRefreshConfigNote(`✗ 保存失败: ${e.message}`);
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,6 +144,44 @@ export function Protocols() {
           <button type="submit" className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">保存</button>
         </form>
       )}
+
+      <div className="bg-gray-900 rounded-lg p-6 mb-4">
+        <div className="flex items-baseline justify-between mb-2 flex-wrap gap-2">
+          <h2 className="text-lg font-semibold">自动刷新数据</h2>
+          {refreshConfigNote && (
+            <span className={`text-xs ${refreshConfigNote.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>
+              {refreshConfigNote}
+            </span>
+          )}
+        </div>
+        <p className="text-gray-500 text-sm mb-4">
+          定时拉取所有启用协议的 APY / TVL 到数据库，驱动"协议对比"页数据（独立于 Telegram 推送，修改立即生效）。
+        </p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={refreshConfig.enabled}
+              onChange={e => saveRefreshConfig({ enabled: e.target.checked })}
+              className="w-4 h-4 rounded bg-gray-800 border-gray-600" />
+            <span className="text-sm">启用自动刷新</span>
+          </label>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-400">刷新间隔</label>
+            <select value={refreshConfig.interval}
+              onChange={e => saveRefreshConfig({ interval: Number(e.target.value) })}
+              disabled={!refreshConfig.enabled}
+              className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-50">
+              <option value={300}>5 分钟</option>
+              <option value={600}>10 分钟</option>
+              <option value={1800}>30 分钟</option>
+              <option value={3600}>1 小时</option>
+              <option value={7200}>2 小时</option>
+              <option value={14400}>4 小时</option>
+              <option value={21600}>6 小时</option>
+              <option value={43200}>12 小时</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-gray-900 rounded-lg p-6 mb-6">
         <h2 className="text-lg font-semibold mb-2">定时报告推送</h2>

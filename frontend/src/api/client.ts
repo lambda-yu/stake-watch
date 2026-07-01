@@ -34,6 +34,11 @@ export const api = {
     updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
       request<any>('/protocols/report-config', { method: 'PUT', body: JSON.stringify(data) }),
     sendReport: () => request<any>('/protocols/report/send', { method: 'POST' }),
+    refreshConfig: () => request<{ interval: number; enabled: boolean }>(
+      '/protocols/refresh-config'),
+    updateRefreshConfig: (data: { interval?: number; enabled?: boolean }) =>
+      request<{ interval: number; enabled: boolean; hot_reload?: string }>(
+        '/protocols/refresh-config', { method: 'PUT', body: JSON.stringify(data) }),
   },
   intervals: {
     get: () => request<any>('/config/intervals'),

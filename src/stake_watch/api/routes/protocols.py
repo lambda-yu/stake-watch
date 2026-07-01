@@ -522,6 +522,52 @@ async def update_protocols_report_config(data: ProtocolsReportConfigUpdate,
     return await get_protocols_report_config(store)
 
 
+@router.get("/refresh-config")
+async def get_protocols_refresh_config(store: ConfigStore = Depends(get_config_store)):
+    """Auto-refresh (pull latest APY/TVL for Comparison page) — independent
+    from the Telegram protocols_report so you can refresh often + push rarely."""
+    interval = await store.get_setting("protocols.refresh_interval") or 3600
+    enabled = await store.get_setting("protocols.refresh_enabled")
+    if enabled is None:
+        enabled = True
+    return {"interval": interval, "enabled": enabled}
+
+
+class ProtocolsRefreshConfigUpdate(BaseModel):
+    interval: int | None = None
+    enabled: bool | None = None
+
+
+@router.put("/refresh-config")
+async def update_protocols_refresh_config(data: ProtocolsRefreshConfigUpdate,
+                                            store: ConfigStore = Depends(get_config_store)):
+    if data.interval is not None:
+        await store.set_setting("protocols.refresh_interval",
+                                  max(60, int(data.interval)))
+    if data.enabled is not None:
+        await store.set_setting("protocols.refresh_enabled", bool(data.enabled))
+
+    # Hot-reload the scheduler so no restart is needed.
+    applied = None
+    if data.interval is not None or data.enabled is not None:
+        from stake_watch.api.deps import get_scheduler
+        sched = get_scheduler()
+        if sched is not None:
+            current = await get_protocols_refresh_config(store)
+            effective = int(current["interval"]) if current["enabled"] else 0
+            try:
+                applied = sched.apply_protocols_refresh_config(interval=effective)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(
+                    f"hot-reload of protocols_refresh failed: {e}")
+                applied = f"error: {e}"
+    body = await get_protocols_refresh_config(store)
+    if applied is not None:
+        body["hot_reload"] = applied
+    return body
+
+
 @router.post("/report/send")
 async def send_protocols_report_now(storage: Storage = Depends(get_storage)):
     from stake_watch.alerts.protocols_report import send_protocols_report
