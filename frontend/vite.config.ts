@@ -6,7 +6,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        // Disable keep-alive so a stale idle socket (closed by Uvicorn after
+        // its keepalive timeout) doesn't cause spurious `read ECONNRESET`
+        // errors when Vite's proxy tries to reuse it.
+        agent: false,
+      },
     },
   },
 })
