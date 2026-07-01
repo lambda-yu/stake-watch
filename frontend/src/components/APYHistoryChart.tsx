@@ -15,9 +15,19 @@ const SERIES_COLORS = [
 
 type Props = { protocolId: number };
 
+const SOURCE_LABELS: Record<string, { label: string; color: string; hint: string }> = {
+  defillama: { label: 'DefiLlama', color: 'text-emerald-400',
+              hint: '官方数据（每日粒度，最长 ~1 年）' },
+  snapshots: { label: '本地快照', color: 'text-amber-400',
+              hint: '本地采集（4h 粒度，从安装起累积）' },
+  empty:     { label: '无数据', color: 'text-gray-500', hint: '' },
+};
+
 export function APYHistoryChart({ protocolId }: Props) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
+  const [source, setSource] = useState<'auto' | 'official' | 'local'>('auto');
   const [series, setSeries] = useState<Series[] | null>(null);
+  const [usedSource, setUsedSource] = useState<string>('empty');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,14 +35,17 @@ export function APYHistoryChart({ protocolId }: Props) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api.protocols.history(protocolId, days)
-      .then(r => { if (!cancelled) setSeries(r.series); })
+    api.protocols.history(protocolId, days, source)
+      .then(r => {
+        if (!cancelled) { setSeries(r.series); setUsedSource(r.source); }
+      })
       .catch(e => { if (!cancelled) setError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [protocolId, days]);
+  }, [protocolId, days, source]);
 
   const totalPoints = series?.reduce((n, s) => n + s.points.length, 0) ?? 0;
+  const srcMeta = SOURCE_LABELS[usedSource] || SOURCE_LABELS.empty;
 
   return (
     <div className="mt-2">
@@ -47,16 +60,34 @@ export function APYHistoryChart({ protocolId }: Props) {
             </button>
           ))}
         </div>
-        <span className="text-xs text-gray-500">
-          {loading ? '加载中...' : `${totalPoints} 个数据点`}
-        </span>
+        <div className="flex items-center gap-2">
+          <select value={source} onChange={e => setSource(e.target.value as any)}
+            title="数据源"
+            className="text-xs bg-gray-800 border border-gray-700 rounded px-2 py-1 text-gray-300">
+            <option value="auto">自动</option>
+            <option value="official">官方 (DefiLlama)</option>
+            <option value="local">本地快照</option>
+          </select>
+          {series && series.length > 0 && (
+            <span className={`text-xs ${srcMeta.color}`} title={srcMeta.hint}>
+              {srcMeta.label}
+            </span>
+          )}
+          <span className="text-xs text-gray-500">
+            {loading ? '加载中...' : `${totalPoints} 点`}
+          </span>
+        </div>
       </div>
 
       {error && <p className="text-xs text-red-400">加载失败: {error}</p>}
 
       {!loading && !error && series && series.length === 0 && (
         <p className="text-xs text-gray-500">
-          还没有历史数据 — 快照每 4 小时采一次，首次运行需要等一两个周期。
+          {source === 'official'
+            ? '官方数据源未匹配到此协议 — 请检查 DefiLlama slug / pool_filter 配置'
+            : source === 'local'
+              ? '本地快照尚未累积到数据（每 4h 采一次，首次运行需等一两个周期）'
+              : '暂无历史数据'}
         </p>
       )}
 

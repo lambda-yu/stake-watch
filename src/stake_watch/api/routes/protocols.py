@@ -310,33 +310,73 @@ async def reevaluate_protocol(protocol_id: int,
 
 @router.get("/{protocol_id}/history")
 async def get_protocol_history(protocol_id: int, days: int = 30,
+                                 source: str = "auto",
                                  store: ConfigStore = Depends(get_config_store),
                                  storage: Storage = Depends(get_storage)):
     """Return APY / TVL time-series (last `days` days) grouped per (chain, asset).
 
-    Data source: tvl_snapshots — populated by the scheduler's snapshots job
-    every `protocols.snapshots_interval` seconds (default 4h).
+    `source`:
+      - "auto" (default): try DefiLlama's official /chart/{pool_id} feed first
+        (up to ~1yr of history at daily granularity). Fall back to our own
+        tvl_snapshots table when the protocol has no defillama_slug or the
+        upstream call fails.
+      - "official": force DefiLlama; return empty series if unavailable.
+      - "local": use only the tvl_snapshots table (populated every
+        protocols.snapshots_interval, default 4h).
     """
     p = await store.get_protocol(protocol_id)
     if not p:
         return Response(status_code=404)
     days = max(1, min(int(days), 365))
-    rows = await storage.get_apy_tvl_history(p.name, days=days)
-    # Group by (chain, asset) → list of {t, apy, tvl}
-    series: dict[tuple[str, str], list[dict]] = {}
-    for r in rows:
-        key = (r["chain"], r["asset"])
-        series.setdefault(key, []).append({
-            "t": r["created_at"], "apy": r["apy"], "tvl_usd": r["tvl_usd"],
-        })
+
+    def _from_snapshots(rows):
+        series: dict[tuple[str, str], list[dict]] = {}
+        for r in rows:
+            series.setdefault((r["chain"], r["asset"]), []).append({
+                "t": r["created_at"], "apy": r["apy"], "tvl_usd": r["tvl_usd"],
+            })
+        return series
+
+    used_source = None
+    series_dict: dict[tuple[str, str], list[dict]] = {}
+
+    # Try official (DefiLlama) unless the caller forced local.
+    if source in ("auto", "official") and p.defillama_slug:
+        from stake_watch.collectors.defillama_history import (
+            fetch_protocol_history, CHAIN_DISPLAY,
+        )
+        chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
+        try:
+            points = await fetch_protocol_history(
+                store, protocol_name=p.name, slug=p.defillama_slug,
+                chain=chain, asset=asset,
+                pool_filter=getattr(p, "pool_filter", None),
+                days=days,
+            )
+            if points:
+                chain_display = CHAIN_DISPLAY.get(chain.lower(), chain).upper()[:4]
+                series_dict = {(chain_display, asset): points}
+                used_source = "defillama"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"DefiLlama history failed for {p.name}: {e}")
+
+    if not series_dict and source != "official":
+        rows = await storage.get_apy_tvl_history(p.name, days=days)
+        series_dict = _from_snapshots(rows)
+        if series_dict:
+            used_source = "snapshots"
+
     return {
         "protocol": p.name,
         "days": days,
+        "source": used_source or "empty",
         "series": [
             {"chain": chain, "asset": asset, "points": pts}
-            for (chain, asset), pts in series.items()
+            for (chain, asset), pts in series_dict.items()
         ],
-        "count": sum(len(pts) for pts in series.values()),
+        "count": sum(len(pts) for pts in series_dict.values()),
     }
 
 
