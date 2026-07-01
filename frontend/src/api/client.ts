@@ -22,6 +22,8 @@ export const api = {
     list: () => request<any[]>('/protocols'),
     add: (data: any) =>
       request<any>('/protocols', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: number, data: any) =>
+      request<any>(`/protocols/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     toggle: (id: number) =>
       request<any>(`/protocols/${id}/toggle`, { method: 'PATCH' }),
     delete: (id: number) =>

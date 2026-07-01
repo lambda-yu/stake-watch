@@ -28,10 +28,29 @@ function groupProtocols(protocols: any[]) {
   return groups;
 }
 
+const COLLECTORS = ['defillama', 'morpho', 'aave_v3', 'compound_v3', 'sky_susds', 'kamino'];
+const PROTOCOL_TYPES = ['lending', 'savings', 'vault'];
+
+type EditForm = {
+  name: string; chain: string; collector: string;
+  defillama_slug: string; safety_score: string;
+  vault_address: string; pool_filter: string;
+  protocol_type: string; reference_apy: string;
+  safety_rank: string; primary_risks: string;
+};
+
+const EMPTY_FORM: EditForm = {
+  name: '', chain: 'base', collector: 'defillama',
+  defillama_slug: '', safety_score: '',
+  vault_address: '', pool_filter: '', protocol_type: '',
+  reference_apy: '', safety_rank: '', primary_risks: '',
+};
+
 export function Protocols() {
   const [protocols, setProtocols] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', chain: 'base', collector: 'defillama', defillama_slug: '', safety_score: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState<any>(null);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -66,14 +85,60 @@ export function Protocols() {
     }
   };
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const buildPayload = (): any => {
+    const risks = form.primary_risks
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const payload: any = {
+      chain: form.chain, collector: form.collector,
+      defillama_slug: form.defillama_slug || null,
+      safety_score: form.safety_score ? Number(form.safety_score) : null,
+      safety_rank: form.safety_rank ? Number(form.safety_rank) : null,
+      reference_apy: form.reference_apy || null,
+      vault_address: form.vault_address || null,
+      pool_filter: form.pool_filter || null,
+      protocol_type: form.protocol_type || null,
+      primary_risks: risks,
+    };
+    return payload;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.protocols.add({
-      ...form, safety_score: form.safety_score ? Number(form.safety_score) : null, enabled: true,
-    });
-    setForm({ name: '', chain: 'base', collector: 'defillama', defillama_slug: '', safety_score: '' });
+    if (editingId !== null) {
+      await api.protocols.update(editingId, buildPayload());
+    } else {
+      await api.protocols.add({ ...buildPayload(), name: form.name, enabled: true });
+    }
+    setForm(EMPTY_FORM);
     setShowForm(false);
+    setEditingId(null);
     reload();
+  };
+
+  const startEdit = (p: any) => {
+    setEditingId(p.id);
+    setForm({
+      name: p.name,
+      chain: p.chain || 'base',
+      collector: p.collector || 'defillama',
+      defillama_slug: p.defillama_slug || '',
+      safety_score: p.safety_score !== null && p.safety_score !== undefined ? String(p.safety_score) : '',
+      safety_rank: p.safety_rank !== null && p.safety_rank !== undefined ? String(p.safety_rank) : '',
+      reference_apy: p.reference_apy || '',
+      vault_address: p.vault_address || '',
+      pool_filter: p.pool_filter || '',
+      protocol_type: p.protocol_type || '',
+      primary_risks: Array.isArray(p.primary_risks) ? p.primary_risks.join(', ') : '',
+    });
+    setShowForm(true);
+    // Scroll to top so the form is visible
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
   };
 
   const handleRefresh = async () => {
@@ -129,19 +194,114 @@ export function Protocols() {
       )}
 
       {showForm && (
-        <form onSubmit={handleAdd} className="bg-gray-900 rounded-lg p-4 mb-4 grid grid-cols-2 gap-3">
-          <input value={form.name} onChange={e => setForm({...form, name: e.target.value})}
-            placeholder="协议名称" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
-          <select value={form.chain} onChange={e => setForm({...form, chain: e.target.value})}
-            className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
-            {CHAINS.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <input value={form.defillama_slug} onChange={e => setForm({...form, defillama_slug: e.target.value})}
-            placeholder="DefiLlama slug" className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
-          <input value={form.safety_score} onChange={e => setForm({...form, safety_score: e.target.value})}
-            placeholder="安全评分 (0-10)" type="number" step="0.1"
-            className="bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
-          <button type="submit" className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">保存</button>
+        <form onSubmit={handleSubmit} className="bg-gray-900 rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-300">
+              {editingId !== null ? `编辑协议 · ${form.name}` : '添加协议'}
+            </h3>
+            {editingId !== null && (
+              <span className="text-xs text-gray-500">编辑模式不能修改名称</span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">协议名称 <span className="text-red-400">*</span></label>
+              <input value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                disabled={editingId !== null}
+                placeholder="e.g. aave_v3_base"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm disabled:opacity-50 font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">主链</label>
+              <select value={form.chain}
+                onChange={e => setForm({ ...form, chain: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+                {CHAINS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Collector</label>
+              <select value={form.collector}
+                onChange={e => setForm({ ...form, collector: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+                {COLLECTORS.map(c => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">协议类型</label>
+              <select value={form.protocol_type}
+                onChange={e => setForm({ ...form, protocol_type: e.target.value })}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm">
+                <option value="">-</option>
+                {PROTOCOL_TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">DefiLlama slug</label>
+              <input value={form.defillama_slug}
+                onChange={e => setForm({ ...form, defillama_slug: e.target.value })}
+                placeholder="e.g. aave-v3"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Vault 地址（Morpho 必填）</label>
+              <input value={form.vault_address}
+                onChange={e => setForm({ ...form, vault_address: e.target.value })}
+                placeholder="0x..."
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Pool symbol 过滤（可选）</label>
+              <input value={form.pool_filter}
+                onChange={e => setForm({ ...form, pool_filter: e.target.value })}
+                placeholder="e.g. STEAKUSDC"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm font-mono" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">参考 APY 标注（可选）</label>
+              <input value={form.reference_apy}
+                onChange={e => setForm({ ...form, reference_apy: e.target.value })}
+                placeholder="e.g. 4-6%"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">安全评分 (0-10)</label>
+              <input value={form.safety_score}
+                onChange={e => setForm({ ...form, safety_score: e.target.value })}
+                placeholder="8.5" type="number" step="0.1"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">安全排名（数字，越小越安全）</label>
+              <input value={form.safety_rank}
+                onChange={e => setForm({ ...form, safety_rank: e.target.value })}
+                placeholder="1" type="number"
+                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">
+              主要风险点（逗号分隔）
+            </label>
+            <input value={form.primary_risks}
+              onChange={e => setForm({ ...form, primary_risks: e.target.value })}
+              placeholder="共享流动池, 利用率, Base L2 风险"
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm" />
+          </div>
+
+          <div className="flex gap-2">
+            <button type="submit"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm">
+              {editingId !== null ? '保存修改' : '添加'}
+            </button>
+            <button type="button" onClick={cancelEdit}
+              className="px-6 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 py-2 rounded text-sm">
+              取消
+            </button>
+          </div>
         </form>
       )}
 
@@ -263,6 +423,7 @@ export function Protocols() {
                     <ProtocolCard key={p.id} protocol={p}
                       onToggle={async (id) => { await api.protocols.toggle(id); reload(); }}
                       onDelete={async (id) => { await api.protocols.delete(id); reload(); }}
+                      onEdit={() => startEdit(p)}
                       onReevaluate={async (id) => { await api.protocols.evaluate(id); reload(); }}
                     />
                   ))}

@@ -42,7 +42,7 @@ type Protocol = {
   defillama_slug?: string | null;
   vault_address?: string | null;
 };
-type Props = { protocol: Protocol; onToggle: (id: number) => void; onDelete: (id: number) => void; onReevaluate?: (id: number) => void };
+type Props = { protocol: Protocol; onToggle: (id: number) => void; onDelete: (id: number) => void; onEdit?: () => void; onReevaluate?: (id: number) => void };
 
 import { useEffect, useState } from 'react';
 import { RiskRadar } from './RiskRadar';
@@ -135,7 +135,7 @@ function getLinks(p: Protocol) {
   return null;
 }
 
-export function ProtocolCard({ protocol: p, onToggle, onDelete, onReevaluate }: Props) {
+export function ProtocolCard({ protocol: p, onToggle, onDelete, onEdit, onReevaluate }: Props) {
   const hasChains = p.chains_breakdown && p.chains_breakdown.length > 0;
   const links = getLinks(p);
   const [showRadar, setShowRadar] = useState(false);
@@ -243,6 +243,12 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete, onReevaluate }: 
             className={`text-xs px-3 py-1 rounded ${p.enabled ? 'bg-green-800 text-green-200' : 'bg-gray-700 text-gray-400'}`}>
             {p.enabled ? '已启用' : '已禁用'}
           </button>
+          {onEdit && (
+            <button onClick={onEdit}
+              className="text-xs text-blue-400 hover:text-blue-300 px-2">
+              编辑
+            </button>
+          )}
           <button onClick={() => onDelete(p.id)} className="text-xs text-red-400 hover:text-red-300">删除</button>
         </div>
       </div>

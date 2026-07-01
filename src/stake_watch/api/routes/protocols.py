@@ -576,3 +576,42 @@ async def send_protocols_report_now(storage: Storage = Depends(get_storage)):
         return {"success": True}
     except Exception as e:
         return {"success": False, "error": str(e)}
+
+
+# NOTE: keep this at the very bottom. `/{protocol_id}` matches every path
+# segment as an int; putting it above the literal-path PUT routes
+# (/report-config, /refresh-config, ...) would shadow them and cause 422.
+class ProtocolUpdate(BaseModel):
+    """Partial update — only fields explicitly set are written.
+    `name` is intentionally excluded (identity/rows keyed by it elsewhere)."""
+    chain: str | None = None
+    collector: str | None = None
+    enabled: bool | None = None
+    safety_rank: int | None = None
+    safety_score: float | None = None
+    reference_apy: str | None = None
+    primary_risks: list[str] | None = None
+    vault_address: str | None = None
+    defillama_slug: str | None = None
+    pool_filter: str | None = None
+    protocol_type: str | None = None
+
+
+@router.put("/{protocol_id}")
+async def update_protocol(protocol_id: int, data: ProtocolUpdate,
+                            store: ConfigStore = Depends(get_config_store)):
+    p = await store.get_protocol(protocol_id)
+    if not p:
+        return Response(status_code=404)
+    fields = data.model_dump(exclude_unset=True)
+    if "primary_risks" in fields and fields["primary_risks"] is not None:
+        fields["primary_risks"] = json.dumps(fields["primary_risks"])
+    chain_changed = "chain" in fields and fields["chain"] != p.chain
+    updated = await store.update_protocol(protocol_id, **fields)
+    if chain_changed and updated:
+        prim_chain, prim_asset = PRIMARY_PRODUCT.get(
+            updated.name, (updated.chain, "USDC"))
+        scores = _compute_baseline_risk(updated.name, prim_chain, prim_asset)
+        await store.update_protocol(protocol_id, risk_scores=json.dumps(scores))
+    p = await store.get_protocol(protocol_id)
+    return _to_dict(p)
