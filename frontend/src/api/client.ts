@@ -32,18 +32,6 @@ export const api = {
     evaluate: (id: number) => request<any>(`/protocols/${id}/evaluate`, { method: 'POST' }),
     riskStatus: (id: number, refresh = false) =>
       request<any>(`/protocols/${id}/risk-status${refresh ? '?refresh=true' : ''}`),
-    history: (id: number, days = 30, source: 'auto' | 'official' | 'local' = 'auto') =>
-      request<{
-        protocol: string;
-        days: number;
-        source: 'morpho' | 'kamino' | 'sky' | 'defillama' | 'snapshots' | 'empty';
-        count: number;
-        series: {
-          chain: string;
-          asset: string;
-          points: { t: string; apy: number; tvl_usd: number }[];
-        }[];
-      }>(`/protocols/${id}/history?days=${days}&source=${source}`),
     reportConfig: () => request<any>('/protocols/report-config'),
     updateReportConfig: (data: { interval?: number; enabled?: boolean }) =>
       request<any>('/protocols/report-config', { method: 'PUT', body: JSON.stringify(data) }),

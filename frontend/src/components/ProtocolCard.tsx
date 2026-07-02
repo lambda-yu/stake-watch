@@ -46,7 +46,6 @@ type Props = { protocol: Protocol; onToggle: (id: number) => void; onDelete: (id
 
 import { useEffect, useState } from 'react';
 import { RiskRadar } from './RiskRadar';
-import { APYHistoryChart } from './APYHistoryChart';
 import { api } from '../api/client';
 
 type RiskCheck = { key: string; label: string; status: 'ok' | 'warning' | 'critical'; value: string; detail: string };
@@ -144,7 +143,6 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete, onEdit, onReeval
   const [riskStatus, setRiskStatus] = useState<RiskStatus | null>(null);
   const [showRiskCtrl, setShowRiskCtrl] = useState(false);
   const [refreshingCtrl, setRefreshingCtrl] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
 
   const loadRiskStatus = async (force = false) => {
     setRefreshingCtrl(true);
@@ -239,11 +237,6 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete, onEdit, onReeval
               )}
             </button>
           )}
-          <button onClick={() => setShowHistory(s => !s)}
-            className="mt-2 ml-3 text-xs text-cyan-300 hover:text-cyan-200 inline-flex items-center gap-1">
-            <span>{showHistory ? '▼' : '▶'}</span>
-            <span>📈 APY 历史</span>
-          </button>
         </div>
         <div className="flex gap-2">
           <button onClick={() => onToggle(p.id)}
@@ -432,11 +425,6 @@ export function ProtocolCard({ protocol: p, onToggle, onDelete, onEdit, onReeval
         </div>
       )}
 
-      {showHistory && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
-          <APYHistoryChart protocolId={p.id} />
-        </div>
-      )}
     </div>
   );
 }
