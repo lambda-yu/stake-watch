@@ -16,8 +16,10 @@ const SERIES_COLORS = [
 type Props = { protocolId: number };
 
 const SOURCE_LABELS: Record<string, { label: string; color: string; hint: string }> = {
+  morpho:    { label: 'Morpho 官方', color: 'text-purple-400',
+              hint: 'Morpho GraphQL historicalState (per-vault, 权威源)' },
   defillama: { label: 'DefiLlama', color: 'text-emerald-400',
-              hint: '官方数据（每日粒度，最长 ~1 年）' },
+              hint: 'DefiLlama /chart 聚合（每日粒度，最长 ~1 年）' },
   snapshots: { label: '本地快照', color: 'text-amber-400',
               hint: '本地采集（4h 粒度，从安装起累积）' },
   empty:     { label: '无数据', color: 'text-gray-500', hint: '' },

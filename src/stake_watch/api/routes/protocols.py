@@ -316,11 +316,10 @@ async def get_protocol_history(protocol_id: int, days: int = 30,
     """Return APY / TVL time-series (last `days` days) grouped per (chain, asset).
 
     `source`:
-      - "auto" (default): try DefiLlama's official /chart/{pool_id} feed first
-        (up to ~1yr of history at daily granularity). Fall back to our own
-        tvl_snapshots table when the protocol has no defillama_slug or the
-        upstream call fails.
-      - "official": force DefiLlama; return empty series if unavailable.
+      - "auto" (default): prefer the protocol's OWN official API (e.g. Morpho
+        GraphQL for vaults), then DefiLlama's /chart/{pool_id}, then our
+        local tvl_snapshots. Uses whichever succeeds first.
+      - "official": force protocol-native or DefiLlama; empty if neither works.
       - "local": use only the tvl_snapshots table (populated every
         protocols.snapshots_interval, default 4h).
     """
@@ -339,13 +338,34 @@ async def get_protocol_history(protocol_id: int, days: int = 30,
 
     used_source = None
     series_dict: dict[tuple[str, str], list[dict]] = {}
+    chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
+    _CHAIN_SHORT = {"ethereum": "ETH", "base": "BASE",
+                     "solana": "SOL", "bsc": "BSC"}
+    chain_short = _CHAIN_SHORT.get(chain.lower(), chain.upper()[:4])
 
-    # Try official (DefiLlama) unless the caller forced local.
-    if source in ("auto", "official") and p.defillama_slug:
+    # 1. Try the protocol's own official API when we have one.
+    #    Morpho vaults: authoritative GraphQL historicalState.
+    if (source in ("auto", "official")
+            and getattr(p, "vault_address", None)
+            and p.name.startswith("morpho_")):
+        try:
+            from stake_watch.collectors.morpho.morpho_history import (
+                fetch_vault_history,
+            )
+            points = await fetch_vault_history(p.vault_address, chain, days=days)
+            if points:
+                series_dict = {(chain_short, asset): points}
+                used_source = "morpho"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Morpho history failed for {p.name}: {e}")
+
+    # 2. Fall back to DefiLlama aggregation.
+    if not series_dict and source in ("auto", "official") and p.defillama_slug:
         from stake_watch.collectors.defillama_history import (
-            fetch_protocol_history, CHAIN_DISPLAY,
+            fetch_protocol_history,
         )
-        chain, asset = PRIMARY_PRODUCT.get(p.name, (p.chain, "USDC"))
         try:
             points = await fetch_protocol_history(
                 store, protocol_name=p.name, slug=p.defillama_slug,
@@ -354,14 +374,14 @@ async def get_protocol_history(protocol_id: int, days: int = 30,
                 days=days,
             )
             if points:
-                chain_display = CHAIN_DISPLAY.get(chain.lower(), chain).upper()[:4]
-                series_dict = {(chain_display, asset): points}
+                series_dict = {(chain_short, asset): points}
                 used_source = "defillama"
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(
                 f"DefiLlama history failed for {p.name}: {e}")
 
+    # 3. Fall back to our own snapshots (unless caller forced official).
     if not series_dict and source != "official":
         rows = await storage.get_apy_tvl_history(p.name, days=days)
         series_dict = _from_snapshots(rows)
