@@ -71,13 +71,33 @@ class CollectionRunner:
             await self._on_collector_failure(collector, str(e))
             return CollectResult(errors=[str(e)])
 
+    # Hard cap per (collector, wallet) invocation. Beyond this the run is
+    # considered hung (e.g. web3.py's AsyncHTTPProvider has no default read
+    # timeout, so a dropped RPC socket would otherwise block forever).
+    PER_COLLECTOR_TIMEOUT = 90
+
+    async def _run_with_timeout(self, collector: BaseCollector,
+                                  wallet: str) -> CollectResult:
+        try:
+            return await asyncio.wait_for(
+                self._run_single(collector, wallet),
+                timeout=self.PER_COLLECTOR_TIMEOUT)
+        except asyncio.TimeoutError:
+            msg = (f"{collector.protocol}: timed out after "
+                   f"{self.PER_COLLECTOR_TIMEOUT}s (RPC likely stuck)")
+            logger.error(msg)
+            return CollectResult(errors=[msg])
+
     async def run_collection_cycle(self) -> list[CollectResult]:
-        results = []
-        for collector in self.collectors:
-            for wallet in self.wallets:
-                result = await self._run_single(collector, wallet)
-                results.append(result)
-        return results
+        # Run all collectors concurrently. Per-chain semaphores in
+        # BaseCollector.collect() already serialise same-chain RPC pressure,
+        # so gathering here doesn't cause a burst — different-chain
+        # collectors run in true parallel while same-chain ones queue.
+        tasks = [self._run_with_timeout(collector, wallet)
+                 for collector in self.collectors
+                 for wallet in self.wallets]
+        results = await asyncio.gather(*tasks, return_exceptions=False)
+        return list(results)
 
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
