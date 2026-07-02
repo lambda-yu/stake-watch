@@ -361,6 +361,36 @@ async def get_protocol_history(protocol_id: int, days: int = 30,
             logging.getLogger(__name__).warning(
                 f"Morpho history failed for {p.name}: {e}")
 
+    # Kamino has a native REST /metrics/history endpoint.
+    if (not series_dict and source in ("auto", "official")
+            and p.name.startswith("kamino_")):
+        try:
+            from stake_watch.collectors.kamino.kamino_history import (
+                fetch_reserve_history,
+            )
+            points = await fetch_reserve_history(asset, days=days)
+            if points:
+                series_dict = {(chain_short, asset): points}
+                used_source = "kamino"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Kamino history failed for {p.name}: {e}")
+
+    # Sky sUSDS: SSR history via Block Analitica (Sky's own dashboard backend).
+    if (not series_dict and source in ("auto", "official")
+            and p.name == "sky_susds"):
+        try:
+            from stake_watch.collectors.sky.sky_history import fetch_ssr_history
+            points = await fetch_ssr_history(days=days)
+            if points:
+                series_dict = {(chain_short, asset): points}
+                used_source = "sky"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(
+                f"Sky history failed for {p.name}: {e}")
+
     # 2. Fall back to DefiLlama aggregation.
     if not series_dict and source in ("auto", "official") and p.defillama_slug:
         from stake_watch.collectors.defillama_history import (

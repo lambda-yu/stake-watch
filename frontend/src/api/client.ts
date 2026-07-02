@@ -36,7 +36,7 @@ export const api = {
       request<{
         protocol: string;
         days: number;
-        source: 'morpho' | 'defillama' | 'snapshots' | 'empty';
+        source: 'morpho' | 'kamino' | 'sky' | 'defillama' | 'snapshots' | 'empty';
         count: number;
         series: {
           chain: string;

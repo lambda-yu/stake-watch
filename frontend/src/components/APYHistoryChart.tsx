@@ -18,6 +18,10 @@ type Props = { protocolId: number };
 const SOURCE_LABELS: Record<string, { label: string; color: string; hint: string }> = {
   morpho:    { label: 'Morpho 官方', color: 'text-purple-400',
               hint: 'Morpho GraphQL historicalState (per-vault, 权威源)' },
+  kamino:    { label: 'Kamino 官方', color: 'text-pink-400',
+              hint: 'Kamino REST /metrics/history (per-reserve, 权威源)' },
+  sky:       { label: 'Sky (BlockAnalitica)', color: 'text-fuchsia-400',
+              hint: 'Sky 官方 dashboard 使用的数据源 (Block Analitica)' },
   defillama: { label: 'DefiLlama', color: 'text-emerald-400',
               hint: 'DefiLlama /chart 聚合（每日粒度，最长 ~1 年）' },
   snapshots: { label: '本地快照', color: 'text-amber-400',
