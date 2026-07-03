@@ -260,7 +260,7 @@ ETHEREUM USDC: APY 4.12%  TVL $1.2B
 - `chains_breakdown = await config_store.get_setting(f"protocols.{name}.chains")` — 已经是每链每 asset 的 `{apy, tvl_usd}` 结构（复用 `protocols_report.py` 的读取路径）
 - 若 `chains_breakdown` 为空：fallback 到 `storage.get_latest_protocol_stats(name)`，展示单一 chain + pool（asset 优先选 USDC，否则第一个 pool）
 - 时间戳来自 stats 记录（`ProtocolStats.timestamp`）；格式化用 `alerts.timezone.now_display` 的同款模板作用在 `stats.timestamp` 上（`YYYY-MM-DD HH:MM (UTC±N)`），无 stats 则省略此行
-- TVL 格式化：**把 `protocols_report._format_tvl` 提升为 `alerts/formatter.py` 里的 `format_tvl` 公共函数**，`protocols_report.py` 和 `bot_commands.py` 都 import 同一个，避免两份实现漂移。这是本 spec 的第 5 项交付物。
+- TVL 格式化：**把 `protocols_report._format_tvl` 提升为 `alerts/formatter.py` 里的 `format_tvl` 公共函数**，`protocols_report.py` 和 `bot_commands.py` 都 import 同一个，避免两份实现漂移（见下方交付清单）。
 
 **Section 是否展示的规则:**
 - Safety Score / 风险评分：值为 None 或空 dict 时省略该行
@@ -289,7 +289,7 @@ Telegram push (existing)  Telegram push (existing)  reply_text (new)
 ## 错误处理
 
 - **Bot 启动失败**（错误的 token 等）：`_safe_run_bot` 记 exception log，asyncio task 结束，其他部分继续。
-- **单个命令内部异常**：python-telegram-bot 的 `Application` 自带 error handler；额外注册一个自定义 error handler 记 log，并向 chat 回复"处理命令时出错，请查看日志"（仅当 update 来自授权 chat 时）。
+- **单个命令内部异常**：python-telegram-bot v22 **没有默认 error handler**；`run()` 里显式 `add_error_handler(self._on_error)` 才能捕获。`_on_error` 里 `logger.exception(...)` 记 log，若 update 来自授权 chat 则 `reply_text("处理命令时出错，请查看日志")`。
 - **未配置 token/chat_id**：主进程日志"Telegram bot token or chat_id missing, bot commands disabled"，不启动 polling。
 - **配置热更新**：不支持。用户在 Settings 里改 token/chat_id 需重启进程（跟 scheduler 大部分 job 的行为一致，简化设计）。
 
