@@ -67,7 +67,7 @@ def test_format_tvl_scales(v, expected):
     assert format_tvl(v) == expected
 ```
 
-If `pytest` is not already imported at the top of the file, add `import pytest` at the top.
+Add `import pytest` at the top of the file (the current header doesn't import it).
 
 - [ ] **Step 3: Run test to verify it fails**
 
@@ -113,41 +113,37 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ### Task 1.2: Migrate `protocols_report.py` to the public helper
 
+This is a mechanical refactor — no behavior change, so no red/green cycle. Verify green after the rename.
+
 **Files:**
 - Modify: `src/stake_watch/alerts/protocols_report.py`
-- Test: `tests/alerts/test_protocols_report.py`
+- Modify: `tests/alerts/test_protocols_report.py`
 
-- [ ] **Step 1: Update the test to import from `formatter`**
+- [ ] **Step 1: Delete the duplicated test in `test_protocols_report.py`**
 
-In `tests/alerts/test_protocols_report.py`, change the import block:
+Open `tests/alerts/test_protocols_report.py`. The parametrized `test_format_tvl_scales` there now duplicates the identical test in `test_formatter.py` (added in Task 1.1). Delete the duplicate along with the `_format_tvl` import line — the canonical coverage lives in `test_formatter.py`.
+
+- [ ] **Step 2: Update remaining imports in `test_protocols_report.py`**
+
+The file no longer needs `_format_tvl`. Change the import block to:
 
 ```python
-from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.protocols_report import (
     _best_apy,
     format_protocols_report,
 )
 ```
 
-And rename any local usage of `_format_tvl` in this test file to `format_tvl` (there is one parametrized test — rename it accordingly).
+- [ ] **Step 3: In `protocols_report.py`, replace the local `_format_tvl`**
 
-- [ ] **Step 2: Run test to verify it now fails**
+1. Add near the top of `src/stake_watch/alerts/protocols_report.py`: `from stake_watch.alerts.formatter import format_tvl`
+2. Delete the local `_format_tvl` function (around lines 75-82 of the current file).
+3. Replace all 5 call sites of `_format_tvl(` with `format_tvl(` inside `format_protocols_report`.
 
-Run: `uv run pytest tests/alerts/test_protocols_report.py -v`
-Expected: FAIL — either `ImportError: cannot import name '_format_tvl'` if you kept an old import, or the `format_tvl` call passes but the function `_format_tvl` still exists in the module. Adjust as needed until you have a red test that would pass only after removing the local copy.
-
-- [ ] **Step 3: Delete `_format_tvl` in `protocols_report.py` and import the public one**
-
-In `src/stake_watch/alerts/protocols_report.py`:
-
-1. Delete the local `_format_tvl` function (roughly lines 75-82 of the current file).
-2. Add at the top of the file: `from stake_watch.alerts.formatter import format_tvl`
-3. Replace all call sites of `_format_tvl(` with `format_tvl(` (there are 5 in `format_protocols_report`).
-
-- [ ] **Step 4: Run all alerts tests**
+- [ ] **Step 4: Run alerts tests — all green**
 
 Run: `uv run pytest tests/alerts/ -v`
-Expected: PASS.
+Expected: All tests PASS (the previous `test_format_tvl_scales` from `test_protocols_report.py` is gone; the identical one in `test_formatter.py` still covers the behavior).
 
 - [ ] **Step 5: Commit**
 
@@ -155,8 +151,9 @@ Expected: PASS.
 git add src/stake_watch/alerts/protocols_report.py tests/alerts/test_protocols_report.py
 git commit -m "refactor(protocols-report): use public format_tvl helper
 
-Delete the local _format_tvl copy and import from alerts.formatter
-so future callers (bot_commands.py) don't fork the formatting.
+Mechanical: delete the local _format_tvl copy and its now-duplicate
+test, import format_tvl from alerts.formatter so future callers
+(bot_commands.py) don't fork the formatting.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ```
@@ -531,16 +528,17 @@ def test_format_protocol_detail_accepts_row_like_object():
     assert "状态: 启用 ✓" in out
 ```
 
-- [ ] **Step 2: Run tests — expect the truncation test to fail; others should already pass**
+- [ ] **Step 2: Run tests — verify all four PASS**
 
 Run: `uv run pytest tests/alerts/test_bot_commands.py -v`
-Expected: `test_format_protocol_detail_truncates_long_output` may PASS if your implementation already truncates (it does, per Task 2.2). If any edge case fails, investigate before proceeding — do not just tweak assertions to green.
+Expected: PASS. These are additional characterization tests; the implementation from Task 2.2 should already handle them.
 
-- [ ] **Step 3: If any test fails, adjust the implementation minimally**
+- [ ] **Step 3: If any test fails, that's a real bug in Task 2.2 — fix minimally**
 
-Only touch `format_protocol_detail` and helpers. Common gotchas:
+Only touch `format_protocol_detail` and its private helpers. Common gotchas:
 - ORM row without `risk_scores` returns `None` → `_view` maps to `None`, current guard `isinstance(risk, dict) and risk` handles it.
 - Empty `risk_scores` dict (`{}`) must be silenced — the `and risk` clause handles that.
+- Do not change assertions to match a buggy implementation.
 
 - [ ] **Step 4: Run tests — verify all PASS**
 
@@ -995,7 +993,10 @@ class _FakeStorage:
 
 @pytest.mark.asyncio
 async def test_on_protocol_no_args_replies_usage(monkeypatch):
-    store = _FakeConfigStore([_FakeProtocolRow("Aave"), _FakeProtocolRow("Morpho")])
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("morpho_steakhouse_usdc"),
+    ])
     monkeypatch.setattr(
         "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
     )
@@ -1004,12 +1005,15 @@ async def test_on_protocol_no_args_replies_usage(monkeypatch):
     await bot._on_protocol(upd, _make_context(args=[]))
     sent = upd.message.reply_text.await_args.args[0]
     assert "用法" in sent
-    assert "Aave" in sent and "Morpho" in sent
+    assert "aave_v3_base" in sent and "morpho_steakhouse_usdc" in sent
 
 
 @pytest.mark.asyncio
 async def test_on_protocol_unknown_name_replies_candidates(monkeypatch):
-    store = _FakeConfigStore([_FakeProtocolRow("Aave"), _FakeProtocolRow("Morpho")])
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("morpho_steakhouse_usdc"),
+    ])
     monkeypatch.setattr(
         "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
     )
@@ -1018,25 +1022,34 @@ async def test_on_protocol_unknown_name_replies_candidates(monkeypatch):
     await bot._on_protocol(upd, _make_context(args=["nonesuch"]))
     sent = upd.message.reply_text.await_args.args[0]
     assert "未找到" in sent and "nonesuch" in sent
-    assert "Aave" in sent
+    assert "aave_v3_base" in sent
 
 
 @pytest.mark.asyncio
 async def test_on_protocol_case_insensitive_match(monkeypatch):
-    store = _FakeConfigStore([_FakeProtocolRow("Aave"), _FakeProtocolRow("Morpho")])
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("kamino_usdc"),
+    ])
     monkeypatch.setattr(
         "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
     )
     bot = TelegramCommandBot("t", 42, _FakeStorage())
     upd = _make_update_with_reply(42)
-    await bot._on_protocol(upd, _make_context(args=["aave"]))
+    await bot._on_protocol(upd, _make_context(args=["AAVE_V3_BASE"]))
     sent = upd.message.reply_text.await_args.args[0]
-    assert "📋 Aave" in sent
+    assert "📋 aave_v3_base" in sent
 
 
 @pytest.mark.asyncio
 async def test_on_protocol_joins_multi_word_args(monkeypatch):
-    store = _FakeConfigStore([_FakeProtocolRow("Aave V3"), _FakeProtocolRow("Morpho")])
+    # Multi-word support is defensive for future protocol names that may
+    # contain spaces (e.g. "Aave V3"). Current DB names are single tokens;
+    # this test covers the join logic without requiring a shell-quoted arg.
+    store = _FakeConfigStore([
+        _FakeProtocolRow("Aave V3"),
+        _FakeProtocolRow("kamino_usdc"),
+    ])
     monkeypatch.setattr(
         "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
     )
@@ -1049,13 +1062,13 @@ async def test_on_protocol_joins_multi_word_args(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_on_protocol_unauthorized_no_reply(monkeypatch):
-    store = _FakeConfigStore([_FakeProtocolRow("Aave")])
+    store = _FakeConfigStore([_FakeProtocolRow("aave_v3_base")])
     monkeypatch.setattr(
         "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
     )
     bot = TelegramCommandBot("t", 42, _FakeStorage())
     upd = _make_update_with_reply(99)
-    await bot._on_protocol(upd, _make_context(args=["aave"]))
+    await bot._on_protocol(upd, _make_context(args=["aave_v3_base"]))
     upd.message.reply_text.assert_not_awaited()
 ```
 
@@ -1148,7 +1161,7 @@ async def test_on_error_replies_to_authorized_chat_and_logs(caplog):
     upd = _make_update_with_reply(42)
     ctx = MagicMock()
     ctx.error = RuntimeError("kaboom")
-    with caplog.at_level("ERROR"):
+    with caplog.at_level("ERROR", logger="stake_watch.alerts.bot_commands"):
         await bot._on_error(upd, ctx)
     upd.message.reply_text.assert_awaited_once()
     assert "出错" in upd.message.reply_text.await_args.args[0]
@@ -1432,51 +1445,17 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Run: `cat tests/test_main.py`
 Observe the existing style — some tests may mock the storage/config_store; follow the same conventions.
 
-- [ ] **Step 2: Write failing test for the wiring**
+- [ ] **Step 2: Write failing tests for `_build_command_bot`**
 
-The bot startup is behavioral (creates a task, cleans up). Write a small integration-style test that stubs `TelegramCommandBot` and asserts `main.py` instantiates it when config is present, and skips it when config is missing. Add to `tests/test_main.py`:
+The bot startup logic is behavioral (creates a task, cleans up on shutdown). To keep tests small and fast, `main.py` extracts a factory `_build_command_bot(bot_token, chat_id_raw, storage) -> TelegramCommandBot | None` — tested here. The actual `create_task` / `_safe_run_bot` / ordered shutdown wiring is covered by the manual smoke test in Task 5.2 (documented gap: full main() startup is too integration-y to unit-test without heavy mocking).
+
+Append to `tests/test_main.py`:
 
 ```python
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from unittest.mock import MagicMock
 
 
-@pytest.mark.asyncio
-async def test_main_starts_bot_when_config_present(monkeypatch, tmp_path):
-    """When telegram.bot_token + chat_id are set, main.py should build a
-    TelegramCommandBot and schedule it as an asyncio task."""
-
-    # These knobs let us short-circuit main() before it starts uvicorn.
-    from stake_watch import main as main_module
-
-    build_calls = {"n": 0}
-
-    class _StubBot:
-        def __init__(self, token, chat_id, storage):
-            build_calls["n"] += 1
-            self.token = token
-            self.chat_id = chat_id
-
-        async def run(self):
-            await asyncio.sleep(0)  # cooperative
-
-        async def stop(self):
-            pass
-
-    monkeypatch.setattr(main_module, "_build_command_bot",
-                        lambda token, chat_id, storage: _StubBot(token, chat_id, storage))
-
-    # See Step 3 for _build_command_bot — this test drives its creation.
-    ...
-```
-
-_You may find it easier to test **only** `_build_command_bot`, a small factory the wiring calls. That factory returns `None` when config is missing, and a `TelegramCommandBot` otherwise._ Adjust the test above to focus on `_build_command_bot`:
-
-Replace the test with:
-
-```python
 @pytest.mark.asyncio
 async def test_build_command_bot_returns_bot_when_config_present():
     from stake_watch.main import _build_command_bot
@@ -1564,13 +1543,15 @@ Modify the `finally` block at the end of `main()`:
         if bot_task is not None:
             try:
                 await bot_task
+            except asyncio.CancelledError:
+                pass  # normal shutdown path
             except Exception:
                 logger.exception("Telegram command bot task raised on shutdown")
         scheduled.stop()
         await storage.close()
 ```
 
-Order matters: stop the bot before the scheduler / storage so any in-flight handler that touches storage has already returned.
+Order matters: stop the bot before the scheduler / storage so any in-flight handler that touches storage has already returned. `CancelledError` is caught explicitly because if the outer task is cancelled during shutdown, `await bot_task` re-raises it; letting it propagate would skip `scheduled.stop()` / `storage.close()`.
 
 - [ ] **Step 5: Run tests — PASS**
 
@@ -1621,14 +1602,25 @@ Expected: All 392 + new tests PASS; overall coverage steady or improved.
 
 - [ ] **Step 1: Confirm DB has `telegram.bot_token` and `telegram.chat_id`**
 
-Run: `uv run python -c "import asyncio; from stake_watch.storage.db import Storage; from stake_watch.storage.config_store import ConfigStore; \
+Run:
+
+```bash
+uv run python <<'PY'
+import asyncio
+from stake_watch.storage.db import Storage
+from stake_watch.storage.config_store import ConfigStore
+
 async def go():
-    s = Storage('sqlite+aiosqlite:///stake_watch.db'); await s.initialize()
+    s = Storage('sqlite+aiosqlite:///stake_watch.db')
+    await s.initialize()
     c = ConfigStore(s._session_factory)
     print('token set:', bool(await c.get_setting('telegram.bot_token')))
     print('chat_id:', await c.get_setting('telegram.chat_id'))
     await s.close()
-asyncio.run(go())"`
+
+asyncio.run(go())
+PY
+```
 
 If either is empty, set them from the frontend Settings page before continuing.
 
@@ -1649,13 +1641,14 @@ Expected: within a few seconds you get the scheduled-report-style message (whate
 
 Expected: within ~30 s (Playwright warm-up) you get the comparison-page screenshot.
 
-- [ ] **Step 6: Send `/protocol aave` (or another protocol you have configured)**
+- [ ] **Step 6: Send `/protocol <a-name-from-your-DB>`**
 
+Pick any protocol you have configured (e.g. `/protocol aave_v3_base` — use `list_protocols()` values, not display names).
 Expected: the single-protocol detail message with layout matching the spec.
 
 - [ ] **Step 7: Send `/protocol nonesuch`**
 
-Expected: "未找到 'nonesuch'。可用: Aave, Morpho, ..."
+Expected: "未找到 'nonesuch'。可用: <comma-separated list of your configured protocols>"
 
 - [ ] **Step 8: Ctrl-C the backend**
 
