@@ -17,6 +17,7 @@ import logging
 from typing import Any
 
 from stake_watch.alerts.formatter import format_tvl
+from stake_watch.alerts.protocols_report import send_protocols_report
 from stake_watch.alerts.timezone import format_time
 
 logger = logging.getLogger(__name__)
@@ -168,3 +169,14 @@ class TelegramCommandBot:
         if not self._authorized(update):
             return
         await update.message.reply_text(format_help())
+
+    async def _on_protocols(self, update, context):
+        if not self._authorized(update):
+            return
+        # NOTE: no await between locked() check and `async with` — keeps the
+        # check-then-acquire race-free under cooperative scheduling.
+        if self._protocols_lock.locked():
+            await update.message.reply_text("上一个查询还在跑，请稍等…")
+            return
+        async with self._protocols_lock:
+            await send_protocols_report(self._storage)

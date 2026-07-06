@@ -204,3 +204,45 @@ async def test_on_help_unauthorized_silent():
     upd = _make_update_with_reply(99)
     await bot._on_help(upd, _make_context())
     upd.message.reply_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_protocols_calls_send_report(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    called = AsyncMock()
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_protocols_report", called
+    )
+    upd = _make_update_with_reply(42)
+    await bot._on_protocols(upd, _make_context())
+    called.assert_awaited_once_with(bot._storage)
+
+
+@pytest.mark.asyncio
+async def test_on_protocols_unauthorized_no_call(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    called = AsyncMock()
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_protocols_report", called
+    )
+    upd = _make_update_with_reply(99)
+    await bot._on_protocols(upd, _make_context())
+    called.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_protocols_replies_wait_when_locked(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    called = AsyncMock()
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_protocols_report", called
+    )
+    await bot._protocols_lock.acquire()
+    try:
+        upd = _make_update_with_reply(42)
+        await bot._on_protocols(upd, _make_context())
+    finally:
+        bot._protocols_lock.release()
+    upd.message.reply_text.assert_awaited_once()
+    assert "稍等" in upd.message.reply_text.await_args.args[0]
+    called.assert_not_awaited()
