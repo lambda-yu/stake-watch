@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from stake_watch.alerts.bot_commands import (
+    TelegramCommandBot,
     format_help,
     format_protocol_detail,
 )
@@ -138,3 +140,28 @@ def test_format_protocol_detail_accepts_row_like_object():
                                  stats=None, tz_offset=8)
     assert "📋 Aave" in out
     assert "状态: 启用 ✓" in out
+
+
+def _make_update(chat_id: int | None):
+    upd = MagicMock()
+    if chat_id is None:
+        upd.effective_chat = None
+    else:
+        upd.effective_chat = MagicMock()
+        upd.effective_chat.id = chat_id
+    return upd
+
+
+def test_authorized_true_for_matching_chat():
+    bot = TelegramCommandBot(bot_token="t", chat_id=42, storage=MagicMock())
+    assert bot._authorized(_make_update(42)) is True
+
+
+def test_authorized_false_for_wrong_chat():
+    bot = TelegramCommandBot(bot_token="t", chat_id=42, storage=MagicMock())
+    assert bot._authorized(_make_update(99)) is False
+
+
+def test_authorized_false_when_effective_chat_none():
+    bot = TelegramCommandBot(bot_token="t", chat_id=42, storage=MagicMock())
+    assert bot._authorized(_make_update(None)) is False

@@ -12,10 +12,14 @@ Commands:
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
 from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.timezone import format_time
+
+logger = logging.getLogger(__name__)
 
 
 _MAX_MESSAGE_CHARS = 3800  # Telegram hard limit is 4096; leave headroom.
@@ -133,3 +137,29 @@ def _pick_default_pool(pools):
         if "USDC" in (getattr(pool, "asset", "") or "").upper():
             return pool
     return pools[0]
+
+
+class TelegramCommandBot:
+    """Long-polling command bot; runs as an asyncio task in main.py."""
+
+    def __init__(self, bot_token: str, chat_id: int, storage):
+        self._bot_token = bot_token
+        self._chat_id = chat_id
+        self._storage = storage
+        self._app = None
+        self._stopped = asyncio.Event()
+        self._shutdown_done = False
+        self._protocols_lock = asyncio.Lock()
+        self._compare_lock = asyncio.Lock()
+
+    def _authorized(self, update) -> bool:
+        chat = getattr(update, "effective_chat", None)
+        if chat is None or chat.id != self._chat_id:
+            if chat is not None:
+                logger.info(
+                    "telegram: unauthorized chat_id=%s (expected %s)",
+                    chat.id,
+                    self._chat_id,
+                )
+            return False
+        return True
