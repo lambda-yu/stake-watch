@@ -20,6 +20,7 @@ from stake_watch.alerts.comparison_screenshot import send_comparison_screenshot
 from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.protocols_report import send_protocols_report
 from stake_watch.alerts.timezone import format_time
+from stake_watch.storage.config_store import ConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -196,3 +197,40 @@ class TelegramCommandBot:
             await update.message.reply_text(
                 f"截图失败：{result.get('error') or '未知错误'}"
             )
+
+    async def _on_protocol(self, update, context):
+        if not self._authorized(update):
+            return
+
+        config_store = ConfigStore(self._storage._session_factory)
+        protocols = await config_store.list_protocols()
+        candidates = ", ".join(p.name for p in protocols) or "(空)"
+
+        arg = " ".join(context.args or []).strip()
+        if not arg:
+            await update.message.reply_text(
+                f"用法: /protocol <名字>\n可用: {candidates}"
+            )
+            return
+
+        match = next(
+            (p for p in protocols if p.name.lower() == arg.lower()),
+            None,
+        )
+        if match is None:
+            await update.message.reply_text(
+                f"未找到 '{arg}'。可用: {candidates}"
+            )
+            return
+
+        chains = await config_store.get_setting(f"protocols.{match.name}.chains")
+        stats = await self._storage.get_latest_protocol_stats(match.name)
+        tz_offset = await config_store.get_setting("display.timezone_offset") or 8
+
+        text = format_protocol_detail(
+            protocol=match,
+            chains_breakdown=chains,
+            stats=stats,
+            tz_offset=int(tz_offset),
+        )
+        await update.message.reply_text(text)

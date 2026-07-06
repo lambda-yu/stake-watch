@@ -289,3 +289,115 @@ async def test_on_compare_replies_wait_when_locked(monkeypatch):
     ss.assert_not_awaited()
     upd.message.reply_text.assert_awaited_once()
     assert "稍等" in upd.message.reply_text.await_args.args[0]
+
+
+class _FakeProtocolRow:
+    def __init__(self, name, chain="ethereum", enabled=True,
+                 safety_score=85, risk_scores=None):
+        self.name = name
+        self.chain = chain
+        self.enabled = enabled
+        self.safety_score = safety_score
+        self.risk_scores = risk_scores
+
+
+class _FakeConfigStore:
+    def __init__(self, protocols, chains_map=None):
+        self._protocols = protocols
+        self._chains_map = chains_map or {}
+
+    async def list_protocols(self):
+        return self._protocols
+
+    async def get_setting(self, key):
+        return self._chains_map.get(key)
+
+
+class _FakeStorage:
+    def __init__(self, session_factory=None, stats=None):
+        self._session_factory = session_factory or object()
+        self._stats = stats or {}
+
+    async def get_latest_protocol_stats(self, name):
+        return self._stats.get(name)
+
+
+@pytest.mark.asyncio
+async def test_on_protocol_no_args_replies_usage(monkeypatch):
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("morpho_steakhouse_usdc"),
+    ])
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
+    )
+    bot = TelegramCommandBot("t", 42, _FakeStorage())
+    upd = _make_update_with_reply(42)
+    await bot._on_protocol(upd, _make_context(args=[]))
+    sent = upd.message.reply_text.await_args.args[0]
+    assert "用法" in sent
+    assert "aave_v3_base" in sent and "morpho_steakhouse_usdc" in sent
+
+
+@pytest.mark.asyncio
+async def test_on_protocol_unknown_name_replies_candidates(monkeypatch):
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("morpho_steakhouse_usdc"),
+    ])
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
+    )
+    bot = TelegramCommandBot("t", 42, _FakeStorage())
+    upd = _make_update_with_reply(42)
+    await bot._on_protocol(upd, _make_context(args=["nonesuch"]))
+    sent = upd.message.reply_text.await_args.args[0]
+    assert "未找到" in sent and "nonesuch" in sent
+    assert "aave_v3_base" in sent
+
+
+@pytest.mark.asyncio
+async def test_on_protocol_case_insensitive_match(monkeypatch):
+    store = _FakeConfigStore([
+        _FakeProtocolRow("aave_v3_base"),
+        _FakeProtocolRow("kamino_usdc"),
+    ])
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
+    )
+    bot = TelegramCommandBot("t", 42, _FakeStorage())
+    upd = _make_update_with_reply(42)
+    await bot._on_protocol(upd, _make_context(args=["AAVE_V3_BASE"]))
+    sent = upd.message.reply_text.await_args.args[0]
+    assert "📋 aave_v3_base" in sent
+
+
+@pytest.mark.asyncio
+async def test_on_protocol_joins_multi_word_args(monkeypatch):
+    # Multi-word support is defensive for future protocol names that may
+    # contain spaces (e.g. "Aave V3"). Current DB names are single tokens;
+    # this test covers the join logic without requiring a shell-quoted arg.
+    store = _FakeConfigStore([
+        _FakeProtocolRow("Aave V3"),
+        _FakeProtocolRow("kamino_usdc"),
+    ])
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
+    )
+    bot = TelegramCommandBot("t", 42, _FakeStorage())
+    upd = _make_update_with_reply(42)
+    await bot._on_protocol(upd, _make_context(args=["aave", "v3"]))
+    sent = upd.message.reply_text.await_args.args[0]
+    assert "📋 Aave V3" in sent
+
+
+@pytest.mark.asyncio
+async def test_on_protocol_unauthorized_no_reply(monkeypatch):
+    store = _FakeConfigStore([_FakeProtocolRow("aave_v3_base")])
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.ConfigStore", lambda _sf: store
+    )
+    bot = TelegramCommandBot("t", 42, _FakeStorage())
+    upd = _make_update_with_reply(99)
+    await bot._on_protocol(upd, _make_context(args=["aave_v3_base"]))
+    upd.message.reply_text.assert_not_awaited()
