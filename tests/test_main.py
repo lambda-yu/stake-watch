@@ -1,4 +1,6 @@
 from pathlib import Path
+from unittest.mock import MagicMock
+
 import pytest
 from stake_watch.main import build_app
 
@@ -43,3 +45,28 @@ async def test_build_app_empty_db(tmp_path: Path):
     assert runner is not None
     assert len(runner.collectors) == 0
     await storage.close()
+
+
+@pytest.mark.asyncio
+async def test_build_command_bot_returns_bot_when_config_present():
+    from stake_watch.main import _build_command_bot
+    storage = MagicMock()
+    bot = _build_command_bot("fake-token", "42", storage)
+    assert bot is not None
+    assert bot._bot_token == "fake-token"
+    assert bot._chat_id == 42
+
+
+@pytest.mark.asyncio
+async def test_build_command_bot_returns_none_when_token_missing():
+    from stake_watch.main import _build_command_bot
+    assert _build_command_bot(None, "42", MagicMock()) is None
+    assert _build_command_bot("", "42", MagicMock()) is None
+
+
+@pytest.mark.asyncio
+async def test_build_command_bot_returns_none_when_chat_id_missing_or_invalid():
+    from stake_watch.main import _build_command_bot
+    assert _build_command_bot("t", None, MagicMock()) is None
+    assert _build_command_bot("t", "abc", MagicMock()) is None
+    assert _build_command_bot("t", "", MagicMock()) is None

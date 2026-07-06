@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from stake_watch.alerts.bot_commands import TelegramCommandBot, parse_chat_id
 from stake_watch.collectors.base import BaseCollector
 from stake_watch.collectors.registry import build_collector
 from stake_watch.config import AppSettings, ProtocolEntry
@@ -10,6 +11,18 @@ from stake_watch.storage.db import Storage
 from stake_watch.scheduler.runner import CollectionRunner, ScheduledRunner
 
 logger = logging.getLogger(__name__)
+
+
+def _build_command_bot(bot_token, chat_id_raw, storage) -> TelegramCommandBot | None:
+    """Return a TelegramCommandBot if config is present and valid, else None."""
+    if not bot_token:
+        return None
+    chat_id = parse_chat_id(chat_id_raw)
+    if chat_id is None:
+        logger.warning("Invalid or missing telegram.chat_id %r; bot commands disabled",
+                       chat_id_raw)
+        return None
+    return TelegramCommandBot(bot_token, chat_id, storage)
 
 async def build_app(db_url: str | None = None, seed_path: str = "config/seed.yaml"):
     db_url = db_url or os.environ.get("DATABASE_URL", "sqlite:///stake_watch.db")
@@ -115,6 +128,25 @@ async def main():
     from stake_watch.api import deps
     deps.init_scheduler(scheduled)
 
+    # Interactive Telegram command bot (optional).
+    command_bot = _build_command_bot(
+        await config_store.get_setting("telegram.bot_token"),
+        await config_store.get_setting("telegram.chat_id"),
+        storage,
+    )
+    bot_task = None
+    if command_bot is not None:
+        async def _safe_run_bot():
+            try:
+                await command_bot.run()
+            except Exception:
+                logger.exception("Telegram command bot crashed")
+            finally:
+                await command_bot.stop()
+
+        bot_task = asyncio.create_task(_safe_run_bot())
+        logger.info("Telegram command bot started")
+
     import uvicorn
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="info")
     server = uvicorn.Server(config)
@@ -129,6 +161,15 @@ async def main():
     try:
         await server.serve()
     finally:
+        if command_bot is not None:
+            await command_bot.stop()
+        if bot_task is not None:
+            try:
+                await bot_task
+            except asyncio.CancelledError:
+                pass  # normal shutdown path
+            except Exception:
+                logger.exception("Telegram command bot task raised on shutdown")
         scheduled.stop()
         await storage.close()
 
