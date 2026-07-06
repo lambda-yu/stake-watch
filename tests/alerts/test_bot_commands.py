@@ -401,3 +401,35 @@ async def test_on_protocol_unauthorized_no_reply(monkeypatch):
     upd = _make_update_with_reply(99)
     await bot._on_protocol(upd, _make_context(args=["aave_v3_base"]))
     upd.message.reply_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_error_replies_to_authorized_chat_and_logs(caplog):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    upd = _make_update_with_reply(42)
+    ctx = MagicMock()
+    ctx.error = RuntimeError("kaboom")
+    with caplog.at_level("ERROR", logger="stake_watch.alerts.bot_commands"):
+        await bot._on_error(upd, ctx)
+    upd.message.reply_text.assert_awaited_once()
+    assert "出错" in upd.message.reply_text.await_args.args[0]
+    assert any("kaboom" in r.getMessage() for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_on_error_stays_silent_for_unauthorized_chat():
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    upd = _make_update_with_reply(99)
+    ctx = MagicMock()
+    ctx.error = RuntimeError("kaboom")
+    await bot._on_error(upd, ctx)
+    upd.message.reply_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_error_survives_missing_update():
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    ctx = MagicMock()
+    ctx.error = RuntimeError("kaboom")
+    # None update happens when the error came from a non-command source.
+    await bot._on_error(None, ctx)  # must not raise

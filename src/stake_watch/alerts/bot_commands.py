@@ -234,3 +234,20 @@ class TelegramCommandBot:
             tz_offset=int(tz_offset),
         )
         await update.message.reply_text(text)
+
+    async def _on_error(self, update, context):
+        logger.error(
+            "telegram: handler error: %s",
+            getattr(context, "error", None),
+            exc_info=getattr(context, "error", None),
+        )
+        if update is None:
+            return
+        if not self._authorized(update):
+            return
+        try:
+            await update.message.reply_text("处理命令时出错，请查看服务日志")
+        except Exception:
+            # reply_text can itself fail (Telegram rate limit, network) —
+            # swallow to preserve the error-handler contract.
+            logger.exception("telegram: failed to notify user of error")
