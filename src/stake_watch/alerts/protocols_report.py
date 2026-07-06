@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.timezone import now_display
 from stake_watch.storage.db import Storage
 
@@ -33,23 +34,23 @@ def format_protocols_report(rows: list[dict], tz_offset: int = 8) -> str:
                 usdt = by_asset.get("USDT")
                 parts = []
                 if usdc:
-                    parts.append(f"USDC {usdc['apy']:.2f}% / {_format_tvl(usdc['tvl_usd'])}")
+                    parts.append(f"USDC {usdc['apy']:.2f}% / {format_tvl(usdc['tvl_usd'])}")
                 if usdt:
-                    parts.append(f"USDT {usdt['apy']:.2f}% / {_format_tvl(usdt['tvl_usd'])}")
+                    parts.append(f"USDT {usdt['apy']:.2f}% / {format_tvl(usdt['tvl_usd'])}")
                 if not parts:
                     other = next(iter(by_asset.items()), None)
                     if other:
                         asset, info = other
-                        parts.append(f"{asset} {info['apy']:.2f}% / {_format_tvl(info['tvl_usd'])}")
+                        parts.append(f"{asset} {info['apy']:.2f}% / {format_tvl(info['tvl_usd'])}")
                     else:
-                        parts.append(f"APY {c['apy']:.2f}% / TVL {_format_tvl(c['tvl_usd'])}")
+                        parts.append(f"APY {c['apy']:.2f}% / TVL {format_tvl(c['tvl_usd'])}")
                 lines.append(f"  {c['chain']}: {'  '.join(parts)}")
         else:
             apy = r.get("live_apy")
             tvl = r.get("live_tvl_usd")
             asset = r.get("live_pool_asset", "")
             apy_str = f"{apy:.2f}%" if apy is not None else "—"
-            tvl_str = _format_tvl(tvl) if tvl else "—"
+            tvl_str = format_tvl(tvl) if tvl else "—"
             lines.append(f"  {primary_chain} {asset}: APY {apy_str}  TVL {tvl_str}")
 
     lines.append("\n━━━━━━━━━━━━━━━━━━━━━━")
@@ -70,16 +71,6 @@ def _best_apy(r: dict) -> float | None:
     if candidates:
         return max(candidates)
     return r.get("live_apy")
-
-
-def _format_tvl(v: float) -> str:
-    if v >= 1e9:
-        return f"${v/1e9:.2f}B"
-    if v >= 1e6:
-        return f"${v/1e6:.1f}M"
-    if v >= 1e3:
-        return f"${v/1e3:.0f}K"
-    return f"${v:.0f}"
 
 
 async def send_protocols_report(storage: Storage):

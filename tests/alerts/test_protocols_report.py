@@ -1,25 +1,10 @@
 """Tests for the scheduled Telegram protocols report formatter."""
 from __future__ import annotations
 
-import pytest
-
 from stake_watch.alerts.protocols_report import (
     _best_apy,
-    _format_tvl,
     format_protocols_report,
 )
-
-
-# ---------- _format_tvl ----------
-
-@pytest.mark.parametrize("v,expected", [
-    (500, "$500"),
-    (2_400, "$2K"),
-    (1_200_000, "$1.2M"),
-    (3_400_000_000, "$3.40B"),
-])
-def test_format_tvl_scales(v, expected):
-    assert _format_tvl(v) == expected
 
 
 # ---------- _best_apy ----------
