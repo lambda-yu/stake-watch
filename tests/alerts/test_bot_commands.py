@@ -433,3 +433,32 @@ async def test_on_error_survives_missing_update():
     ctx.error = RuntimeError("kaboom")
     # None update happens when the error came from a non-command source.
     await bot._on_error(None, ctx)  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_stop_before_start_is_noop_and_sets_event():
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    await bot.stop()  # no exception
+    assert bot._stopped.is_set()
+
+
+@pytest.mark.asyncio
+async def test_stop_is_idempotent(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    # Fake an already-started application
+    fake_app = MagicMock()
+    fake_app.updater = MagicMock()
+    fake_app.updater.running = True
+    fake_app.updater.stop = AsyncMock()
+    fake_app.running = True
+    fake_app.stop = AsyncMock()
+    fake_app.shutdown = AsyncMock()
+    bot._app = fake_app
+
+    await bot.stop()
+    await bot.stop()  # second call must not re-invoke shutdown
+
+    fake_app.updater.stop.assert_awaited_once()
+    fake_app.stop.assert_awaited_once()
+    fake_app.shutdown.assert_awaited_once()
+    assert bot._stopped.is_set()

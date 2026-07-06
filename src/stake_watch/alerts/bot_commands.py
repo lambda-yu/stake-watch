@@ -16,6 +16,8 @@ import asyncio
 import logging
 from typing import Any
 
+from telegram.ext import ApplicationBuilder, CommandHandler
+
 from stake_watch.alerts.comparison_screenshot import send_comparison_screenshot
 from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.protocols_report import send_protocols_report
@@ -251,3 +253,49 @@ class TelegramCommandBot:
             # reply_text can itself fail (Telegram rate limit, network) —
             # swallow to preserve the error-handler contract.
             logger.exception("telegram: failed to notify user of error")
+
+    async def run(self):
+        self._app = ApplicationBuilder().token(self._bot_token).build()
+        self._app.add_handler(CommandHandler("help", self._on_help))
+        self._app.add_handler(CommandHandler("protocols", self._on_protocols))
+        self._app.add_handler(CommandHandler("compare", self._on_compare))
+        self._app.add_handler(CommandHandler("protocol", self._on_protocol))
+        self._app.add_error_handler(self._on_error)
+
+        await self._app.initialize()
+        try:
+            await self._app.bot.set_my_commands([
+                ("help", "显示帮助"),
+                ("protocols", "全部协议 APY / TVL 概览"),
+                ("compare", "协议对比页面截图"),
+                ("protocol", "单个协议详情：/protocol <名字>"),
+            ])
+        except Exception:
+            logger.warning("telegram: set_my_commands failed", exc_info=True)
+
+        await self._app.start()
+        await self._app.updater.start_polling(drop_pending_updates=True)
+        try:
+            await self._stopped.wait()
+        finally:
+            # Best-effort stop in case cancellation reaches us here.
+            await self.stop()
+
+    async def stop(self):
+        if self._shutdown_done:
+            self._stopped.set()
+            return
+        if self._app is None:
+            self._shutdown_done = True
+            self._stopped.set()
+            return
+        self._shutdown_done = True
+        try:
+            updater = getattr(self._app, "updater", None)
+            if updater is not None and getattr(updater, "running", False):
+                await updater.stop()
+            if getattr(self._app, "running", False):
+                await self._app.stop()
+            await self._app.shutdown()
+        finally:
+            self._stopped.set()
