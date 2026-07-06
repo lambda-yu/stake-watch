@@ -14,3 +14,18 @@ def format_alert(alert: Alert, tz_offset: int = 8) -> str:
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"{time_str}"
     )
+
+
+def format_tvl(v: float) -> str:
+    """Format a USD TVL value with human-readable scale (K/M/B).
+
+    Preserves the exact output of the previous ``protocols_report._format_tvl``
+    so downstream reports stay identical after the migration.
+    """
+    if v >= 1e9:
+        return f"${v/1e9:.2f}B"
+    if v >= 1e6:
+        return f"${v/1e6:.1f}M"
+    if v >= 1e3:
+        return f"${v/1e3:.0f}K"
+    return f"${v:.0f}"
