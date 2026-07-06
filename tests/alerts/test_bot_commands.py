@@ -10,6 +10,7 @@ from stake_watch.alerts.bot_commands import (
     TelegramCommandBot,
     format_help,
     format_protocol_detail,
+    parse_chat_id,
 )
 
 
@@ -462,3 +463,18 @@ async def test_stop_is_idempotent(monkeypatch):
     fake_app.stop.assert_awaited_once()
     fake_app.shutdown.assert_awaited_once()
     assert bot._stopped.is_set()
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("42", 42),
+    ("  42  ", 42),
+    ("-1001234", -1001234),
+    (42, 42),
+    (None, None),
+    ("", None),
+    ("   ", None),
+    ("abc", None),
+    ("42.5", None),
+])
+def test_parse_chat_id(raw, expected):
+    assert parse_chat_id(raw) == expected

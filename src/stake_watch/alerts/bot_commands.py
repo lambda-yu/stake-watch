@@ -144,6 +144,22 @@ def _pick_default_pool(pools):
     return pools[0]
 
 
+def parse_chat_id(raw) -> int | None:
+    """Best-effort convert a stored chat_id setting to int; None on garbage."""
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw
+    s = str(raw).strip()
+    if not s:
+        return None
+    # int() accepts leading '-' (channels use negative IDs); refuse floats/text.
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return None
+
+
 class TelegramCommandBot:
     """Long-polling command bot; runs as an asyncio task in main.py."""
 
