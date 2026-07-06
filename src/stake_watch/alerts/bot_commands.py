@@ -163,3 +163,8 @@ class TelegramCommandBot:
                 )
             return False
         return True
+
+    async def _on_help(self, update, context):
+        if not self._authorized(update):
+            return
+        await update.message.reply_text(format_help())

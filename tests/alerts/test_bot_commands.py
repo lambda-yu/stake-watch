@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from stake_watch.alerts.bot_commands import (
     TelegramCommandBot,
@@ -165,3 +167,40 @@ def test_authorized_false_for_wrong_chat():
 def test_authorized_false_when_effective_chat_none():
     bot = TelegramCommandBot(bot_token="t", chat_id=42, storage=MagicMock())
     assert bot._authorized(_make_update(None)) is False
+
+
+def _make_update_with_reply(chat_id: int | None, args=None, text=""):
+    upd = MagicMock()
+    if chat_id is None:
+        upd.effective_chat = None
+    else:
+        upd.effective_chat = MagicMock()
+        upd.effective_chat.id = chat_id
+    upd.message = MagicMock()
+    upd.message.reply_text = AsyncMock()
+    upd.message.text = text
+    return upd
+
+
+def _make_context(args=None):
+    ctx = MagicMock()
+    ctx.args = args or []
+    return ctx
+
+
+@pytest.mark.asyncio
+async def test_on_help_authorized_replies_with_help_text():
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    upd = _make_update_with_reply(42)
+    await bot._on_help(upd, _make_context())
+    upd.message.reply_text.assert_awaited_once()
+    sent = upd.message.reply_text.await_args.args[0]
+    assert "/protocols" in sent
+
+
+@pytest.mark.asyncio
+async def test_on_help_unauthorized_silent():
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    upd = _make_update_with_reply(99)
+    await bot._on_help(upd, _make_context())
+    upd.message.reply_text.assert_not_awaited()
