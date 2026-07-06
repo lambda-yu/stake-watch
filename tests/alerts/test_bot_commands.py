@@ -246,3 +246,46 @@ async def test_on_protocols_replies_wait_when_locked(monkeypatch):
     upd.message.reply_text.assert_awaited_once()
     assert "稍等" in upd.message.reply_text.await_args.args[0]
     called.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_compare_success_no_reply(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_comparison_screenshot",
+        AsyncMock(return_value={"success": True, "bytes": 1234}),
+    )
+    upd = _make_update_with_reply(42)
+    await bot._on_compare(upd, _make_context())
+    upd.message.reply_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_on_compare_failure_replies_error(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_comparison_screenshot",
+        AsyncMock(return_value={"success": False, "error": "boom"}),
+    )
+    upd = _make_update_with_reply(42)
+    await bot._on_compare(upd, _make_context())
+    upd.message.reply_text.assert_awaited_once()
+    assert "boom" in upd.message.reply_text.await_args.args[0]
+
+
+@pytest.mark.asyncio
+async def test_on_compare_replies_wait_when_locked(monkeypatch):
+    bot = TelegramCommandBot("t", 42, MagicMock())
+    ss = AsyncMock(return_value={"success": True})
+    monkeypatch.setattr(
+        "stake_watch.alerts.bot_commands.send_comparison_screenshot", ss
+    )
+    await bot._compare_lock.acquire()
+    try:
+        upd = _make_update_with_reply(42)
+        await bot._on_compare(upd, _make_context())
+    finally:
+        bot._compare_lock.release()
+    ss.assert_not_awaited()
+    upd.message.reply_text.assert_awaited_once()
+    assert "稍等" in upd.message.reply_text.await_args.args[0]

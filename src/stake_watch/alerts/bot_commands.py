@@ -16,6 +16,7 @@ import asyncio
 import logging
 from typing import Any
 
+from stake_watch.alerts.comparison_screenshot import send_comparison_screenshot
 from stake_watch.alerts.formatter import format_tvl
 from stake_watch.alerts.protocols_report import send_protocols_report
 from stake_watch.alerts.timezone import format_time
@@ -180,3 +181,18 @@ class TelegramCommandBot:
             return
         async with self._protocols_lock:
             await send_protocols_report(self._storage)
+
+    async def _on_compare(self, update, context):
+        if not self._authorized(update):
+            return
+        # NOTE: no await between locked() check and `async with` — keeps the
+        # check-then-acquire race-free under cooperative scheduling.
+        if self._compare_lock.locked():
+            await update.message.reply_text("上一张截图还在生成，请稍等…")
+            return
+        async with self._compare_lock:
+            result = await send_comparison_screenshot(self._storage)
+        if not result.get("success"):
+            await update.message.reply_text(
+                f"截图失败：{result.get('error') or '未知错误'}"
+            )
