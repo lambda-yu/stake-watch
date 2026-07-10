@@ -49,7 +49,7 @@ src/stake_watch/
     routes/cex.py                    # NEW: /api/cex/* endpoints
   scheduler/runner.py                # EDIT: cex_rates_interval + _refresh_cex_rates
   main.py                            # EDIT: read cex.refresh_interval, pass to ScheduledRunner
-config/seed.yaml                     # EDIT: cex_venues block + cex.refresh_interval
+config/seed.yaml                     # EDIT: cex_venues block
 frontend/src/
   App.tsx                            # EDIT: add /cex route + nav link (matches Protocols/Settings)
   pages/Cex.tsx                      # NEW
