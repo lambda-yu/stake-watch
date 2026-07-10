@@ -41,7 +41,9 @@ src/stake_watch/
   storage/
     tables.py                        # EDIT: add CexEarnRateRow, CexVenueRow
     db.py                            # EDIT: add insert_cex_rates, list_latest_cex_rates, list_cex_history
-    config_store.py                  # EDIT: extend import_seed_if_empty for cex_venues; list/patch venue methods
+    config_store.py                  # EDIT: extend import_seed_if_empty for cex_venues;
+                                     #       add list_cex_venues, list_enabled_cex_venues,
+                                     #       upsert_cex_venue, patch_cex_venue
   api/
     app.py                           # EDIT: include_router for cex
     routes/cex.py                    # NEW: /api/cex/* endpoints
@@ -131,6 +133,7 @@ class CexVenueRow(Base):
     assets_json: Mapped[str] = mapped_column(Text, default='["USDT","USDC"]')
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # bumped on PATCH — matches ProtocolConfigRow
 ```
 
 Append-only for `cex_earn_rates` (like `protocol_stats`); `cex_venues` is upsert (like `wallets`).
@@ -210,7 +213,10 @@ def build_cex_collector(venue: CexVenue) -> CexEarnCollector | None:
 
 ```python
 async def _refresh_cex_rates(self):
-    venues = await self.config_store.list_enabled_cex_venues()
+    # Config store is instantiated locally from the session factory, mirroring
+    # _refresh_protocols / _write_snapshots / _fetch_reserves.
+    store = ConfigStore(self.storage._session_factory)
+    venues = await store.list_enabled_cex_venues()
     pairs = [(v, c) for v in venues if (c := build_cex_collector(v))]
     snaps = await asyncio.gather(*(c.collect() for _, c in pairs))
     for snap in snaps:
@@ -230,14 +236,7 @@ cex_refresh_interval = await config_store.get_setting("cex.refresh_interval") or
 cex_rates_interval=cex_refresh_interval,
 ```
 
-`config/seed.yaml` (loaded once by `ConfigStore.import_seed_if_empty`):
-
-```yaml
-settings:            # existing block, add key:
-  cex.refresh_interval: 1800
-```
-
-The `IntervalConfig` Pydantic class is not extended — the CEX interval flows through `get_setting` like other user-tunable intervals (`stablecoin.report_interval`, `protocols.refresh_interval`), not through the seed-only `IntervalConfig` shape.
+The interval defaults to 1800s via the `... or 1800` fallback in `main.py` (matching how `stablecoin.report_interval` and `protocols.refresh_interval` are handled today) and becomes user-editable from Settings via `set_setting` once modified. No new key is added to `config/seed.yaml` — `ConfigStore.import_seed_if_empty` has no generic-settings loader, so a seed entry there would be a no-op. The `IntervalConfig` Pydantic class is not extended either.
 
 ## FastAPI
 
