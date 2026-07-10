@@ -24,13 +24,12 @@
 
 **Files:**
 - Create: `scripts/cex_spike.py` (throwaway probe script; deleted at the end of the chunk)
-- Create: `tests/cex/__init__.py`
 - Create: `tests/cex/fixtures/binance_earn.json`
 - Create: `tests/cex/fixtures/okx_earn.json`
 - Create: `tests/cex/fixtures/bybit_earn.json`
 - Create: `tests/cex/fixtures/gate_earn.json`
 - Create: `tests/cex/fixtures/bitget_earn.json`
-- Create: `docs/superpowers/specs/2026-07-10-cex-earn-collectors-design.md` (append **Endpoint verification results** section — do not rewrite the spec, only append)
+- Modify (append appendix only): `docs/superpowers/specs/2026-07-10-cex-earn-collectors-design.md`
 
 **Follow @superpowers:systematic-debugging if any venue misbehaves — the failure mode dictates the fallback strategy.**
 
@@ -454,6 +453,19 @@ async def test_seed_is_idempotent_for_cex(store, tmp_path):
     await store.import_seed_if_empty(str(seed))
     await store.import_seed_if_empty(str(seed))  # second run must be a no-op
     assert len(await store.list_cex_venues()) == 1
+
+@pytest.mark.asyncio
+async def test_seed_cex_when_protocols_already_exist(store, tmp_path):
+    """Upgrade path: DB has protocols but no CEX venues — CEX must still seed."""
+    # Pretend an older install already imported protocols.
+    await store.add_protocol(name="fake", chain="ethereum", collector="defillama")
+    seed = tmp_path / "seed.yaml"
+    seed.write_text(
+        "cex_venues:\n"
+        "  - {name: okx, display_name: OKX, enabled: true, assets: [USDT, USDC]}\n"
+    )
+    await store.import_seed_if_empty(str(seed))
+    assert len(await store.list_cex_venues()) == 1
 ```
 
 - [ ] **Step 2: Run — verify fails**
@@ -527,26 +539,58 @@ async def patch_cex_venue(self, name: str, *, enabled: bool | None = None,
         return row
 ```
 
-Extend `import_seed_if_empty` — find the existing method and add a **separately gated** block at its bottom (mirrors the `existing = await self.list_protocols()` gate but for CEX):
+Extend `import_seed_if_empty`. The current method does `existing = await self.list_protocols(); if existing: return False` as an early-return that wraps the whole function — so a plain "append CEX block at the bottom" would never fire on upgrade. **Restructure**: move the `if existing: return False` guard so it wraps only the protocol/RPC/intervals/risk/wallets seed body, then add a **separately gated** CEX block afterward.
+
+Concretely, refactor the method to this shape (adjust to match the exact variable names in the current file):
 
 ```python
-# ... existing seed body ...
+async def import_seed_if_empty(self, seed_path: str = "config/seed.yaml"):
+    """Seed the DB from seed.yaml. Protocol-family seed only runs on an empty
+    protocol table; CEX venues are gated independently to support upgrades."""
+    import yaml
+    from pathlib import Path
 
-# CEX venues — gated independently so upgrades from pre-CEX DBs still seed.
-existing_cex = await self.list_cex_venues()
-if not existing_cex:
-    for entry in data.get("cex_venues", []):
-        await self.upsert_cex_venue(CexVenue(**entry))
+    path = Path(seed_path)
+    if not path.exists():
+        return False
+    data = yaml.safe_load(path.read_text()) or {}
+
+    # Existing gate — only the protocol family
+    existing = await self.list_protocols()
+    if not existing:
+        # ... existing RPC / intervals / risk / wallets / protocols loops here,
+        # unchanged, just re-indented under `if not existing:` ...
+        for chain, rpc_data in data.get("rpc", {}).items():
+            ...  # unchanged
+        for key, value in data.get("intervals", {}).items():
+            await self.set_setting(f"intervals.{key}", value)
+        # ... etc, all existing loops ...
+
+    # New independently-gated block for CEX venues (upgrade path)
+    existing_cex = await self.list_cex_venues()
+    if not existing_cex:
+        for entry in data.get("cex_venues", []):
+            await self.upsert_cex_venue(CexVenue(**entry))
+
+    return True
 ```
 
-(`data` is the variable already used inside `import_seed_if_empty` for the parsed YAML dict — inspect the current implementation to match the exact name.)
+The final `return False` / `return True` semantics can match the pre-existing behavior; the key change is that the early `return False` at line 140 must no longer short-circuit the whole function.
+
+Also add the imports:
+
+```python
+# top imports
+from stake_watch.storage.tables import CexVenueRow  # noqa
+from stake_watch.models.cex import CexVenue  # noqa
+```
 
 - [ ] **Step 4: Run — verify passes**
 
 ```bash
 uv run pytest tests/storage/test_cex_venues.py -v
 ```
-Expected: 5 passed.
+Expected: 6 passed.
 
 - [ ] **Step 5: Update `config/seed.yaml`**
 
@@ -621,6 +665,7 @@ class _FlakyThenOk(CexEarnCollector):
 class _AlwaysBroken(CexEarnCollector):
     venue = "broken"
     _base_delay = 0.01
+    def __init__(self): super().__init__(assets=["USDT"])
     async def fetch(self): raise RuntimeError("500 server error")
 
 class _NotRateLimit(CexEarnCollector):
@@ -934,20 +979,20 @@ For each of `bitget`, `bybit`, `gate`, `binance` (in the order established by Ch
   - [ ] Run the test, watch it pass.
   - [ ] Commit.
 
-For any venue Chunk 1 marked "disabled":
+For any venue Chunk 1 marked "disabled", ship a stub named to match what the registry imports (e.g. `BinanceEarnCollector` for `binance.py`) with the correct `venue` class attribute so the registry test still passes:
 
 ```python
-# src/stake_watch/collectors/cex/<venue>.py
+# src/stake_watch/collectors/cex/<venue>.py — stub form
 from stake_watch.collectors.cex.base import CexEarnCollector
 from stake_watch.models.cex import CexEarnRate
 
-class _EarnCollectorStub(CexEarnCollector):
-    venue = "<venue>"
+class <Venue>EarnCollector(CexEarnCollector):  # concrete name, not _Stub
+    venue = "<venue>"                          # real string, not "<venue>"
     async def fetch(self) -> list[CexEarnRate]:
         raise NotImplementedError("public endpoint unavailable — see spec appendix")
 ```
 
-Its test asserts `NotImplementedError` from `fetch()` and that `collect()` swallows it into `errors`.
+Its test asserts `NotImplementedError` from `fetch()` and that `collect()` swallows it into `errors` (returns `VenueRateSnapshot(rates=[], errors=[...])`).
 
 - [ ] **Step 7: Un-skip the registry test**
 
@@ -1007,8 +1052,9 @@ async def wired():
     store = ConfigStore(s._session_factory)
     await store.upsert_cex_venue(CexVenue(name="okx", display_name="OKX"))
     await store.upsert_cex_venue(CexVenue(name="binance", display_name="Binance"))
-    cr = CollectionRunner(config_store=store, storage=s, wallets=[],
-                          rpc_urls={}, notifier=None, risk_evaluator=None)
+    # CollectionRunner signature (see scheduler/runner.py) is (collectors, storage, wallets)
+    # — _refresh_cex_rates never touches it, but ScheduledRunner requires one to be passed in.
+    cr = CollectionRunner(collectors=[], storage=s, wallets=[])
     runner = ScheduledRunner(collection_runner=cr, storage=s, cex_rates_interval=1)
     yield runner, s, store
     await s.close()
@@ -1027,6 +1073,8 @@ async def test_refresh_writes_rates_and_swallows_errors(wired):
         m.collect = AsyncMock(return_value=okx_ok if v.name == "okx" else binance_fail)
         return m
 
+    # Patch target must match where the function is *looked up* at call time
+    # (module-top import in scheduler/runner.py — see Step 3).
     with patch("stake_watch.scheduler.runner.build_cex_collector", side_effect=_fake_build):
         await runner._refresh_cex_rates()
 
@@ -1045,28 +1093,32 @@ Expected: AttributeError on `_refresh_cex_rates` or on `cex_rates_interval`.
 
 Modify `src/stake_watch/scheduler/runner.py`:
 
-1. Add `cex_rates_interval: int = 1800` to `ScheduledRunner.__init__` args and stash it on `self`.
-2. Add the coroutine (place next to `_refresh_dex_liquidity`):
+1. **Add module-top imports** (matches where `logger`/`asyncio` live already, so the Chunk 6 test's `patch("stake_watch.scheduler.runner.build_cex_collector")` target is valid):
+
+```python
+# with the other top-of-file imports
+from stake_watch.collectors.cex.registry import build_cex_collector
+from stake_watch.storage.config_store import ConfigStore
+from stake_watch.models.cex import CexVenue
+```
+
+2. Add `cex_rates_interval: int = 1800` to `ScheduledRunner.__init__` args and stash it on `self`.
+3. Add the coroutine (place next to `_refresh_dex_liquidity`):
 
 ```python
 async def _refresh_cex_rates(self):
     if not self.storage:
         return
     try:
-        from stake_watch.collectors.cex.registry import build_cex_collector
-        from stake_watch.storage.config_store import ConfigStore
-        import asyncio
+        import json as _json
         store = ConfigStore(self.storage._session_factory)
         venues = await store.list_enabled_cex_venues()
         pairs = []
         for v in venues:
-            # ConfigStore returns rows; adapt to the CexVenue pydantic model
-            from stake_watch.models.cex import CexVenue
-            import json as _json
             venue_model = CexVenue(
                 name=v.name, display_name=v.display_name,
                 enabled=v.enabled,
-                assets=_json.loads(v.assets_json or "[]") or ["USDT","USDC"],
+                assets=_json.loads(v.assets_json or "[]") or ["USDT", "USDC"],
                 notes=v.notes,
             )
             collector = build_cex_collector(venue_model)
@@ -1082,7 +1134,7 @@ async def _refresh_cex_rates(self):
         logger.error(f"CEX rates refresh failed: {e}")
 ```
 
-3. In `start()`, next to the other conditional `add_job` blocks, add:
+4. In `start()`, next to the other conditional `add_job` blocks, add:
 
 ```python
 if self.cex_rates_interval > 0 and self.storage:
@@ -1506,9 +1558,9 @@ export function Cex() {
 
 - [ ] **Step 3: Wire into `App.tsx`**
 
-- Import `Cex`.
-- Add `<NavLink to="/cex" …>CEX</NavLink>` alongside the existing `/stablecoins` link (Chinese label `CEX 利率`).
-- Add `<Route path="/cex" element={<Cex />} />` to the `<Routes>`.
+- Import `Cex` from `./pages/Cex`.
+- Add a `<NavLink>` matching the exact `className={({ isActive }) => isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'}` pattern used by the other links. Place it after the `/stablecoins` link. Chinese label: `CEX 利率`.
+- Add `<Route path="/cex" element={<Cex />} />` inside the existing `<Routes>`.
 
 - [ ] **Step 4: Manual smoke test**
 
