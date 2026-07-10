@@ -1,0 +1,7 @@
+{
+  "currency": "USDT",
+  "min_lend_amount": "1",
+  "max_lend_amount": "100000000",
+  "max_rate": "0.00057",
+  "min_rate": "0.00000011"
+}

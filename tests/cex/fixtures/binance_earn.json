@@ -1,0 +1,6 @@
+{
+  "_status": "needs-scraping",
+  "_reason": "HTTP 404 from data-center IP; endpoint path bapi/earn/v2/friendly/finance-earn/simple/all no longer resolves. Multiple v1/v2 variants also returned 404 or 400 illegal-parameter. Public Simple-Earn feed appears to require web-scraping or authenticated /sapi.",
+  "_url": "https://www.binance.com/bapi/earn/v2/friendly/finance-earn/simple/all",
+  "data": {"list": []}
+}

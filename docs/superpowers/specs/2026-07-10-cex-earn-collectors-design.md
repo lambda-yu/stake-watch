@@ -339,3 +339,14 @@ Called out here to prevent scope creep:
 5. FastAPI router + `api/app.py` registration.
 6. Frontend page + nav wiring.
 7. Full test suite green + coverage ≥ 90% on new code.
+## Appendix: Endpoint verification (spike results, 2026-07-10)
+
+| Venue   | Status          | URL used                                                                                                     | Response shape summary                                                                                                                       |
+|---------|-----------------|--------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| Binance | needs-scraping  | POST `https://www.binance.com/bapi/earn/v2/friendly/finance-earn/simple/all` (headers `clientType: web`)     | 404 from data-center IP; `bapi` v1/v2 variants also 404/400. Placeholder fixture written; requires HTML scraping or authenticated `/sapi`.   |
+| OKX     | OK              | GET `https://www.okx.com/api/v5/finance/savings/lending-rate-summary?ccy={USDT,USDC}`                        | `{code:"0", data:[{ccy, avgRate, estRate, preRate, avgAmt, avgAmtUsd}], msg}`. One row per ccy; rate is a decimal string (e.g. `"0.025"`).  |
+| Bybit   | OK              | GET `https://api.bybit.com/v5/earn/product?category=FlexibleSaving&coin=USDT`                                | `{retCode:0, result:{list:[{category, coin, estimateApr:"1.52%", productId, status, minStakeAmount, maxStakeAmount, bonusEvents:[], ...}]}}`. APR is a percent string. |
+| Gate    | OK              | GET `https://api.gateio.ws/api/v4/earn/uni/currencies/USDT`                                                  | Single object `{currency, min_lend_amount, max_lend_amount, min_rate, max_rate}`. Rates are per-hour(?) decimal strings (e.g. `"0.00057"`); collector must confirm unit and convert to APR. |
+| Bitget  | needs-scraping  | GET `https://api.bitget.com/api/v2/earn/savings/product?filter=available_and_held&coin=USDT`                 | 400 `Invalid ACCESS_KEY` — even read requires signed auth. `/api/v2/spot/public/products` and `www.bitget.com` feeder paths all 400/404. Placeholder fixture written. |
+
+**Ship order for per-venue collectors (Chunk 5):** OKX first (cleanest schema), then Bybit, then Gate. Binance and Bitget ship with `enabled=false` in seed and a follow-up TODO in `notes` to add either HTML scraping (Binance simple-earn page) or a signed-auth path (Bitget) once we decide. Placeholder fixtures at `tests/cex/fixtures/{binance,bitget}_earn.json` carry `_status: "needs-scraping"` markers so Chunk 5's stub-path can still parse them without `FileNotFoundError`.

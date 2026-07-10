@@ -1,0 +1,48 @@
+{
+  "retCode": 0,
+  "retMsg": "",
+  "result": {
+    "list": [
+      {
+        "category": "FlexibleSaving",
+        "estimateApr": "1.52%",
+        "coin": "USDT",
+        "minStakeAmount": "1.5",
+        "maxStakeAmount": "100000000",
+        "precision": "4",
+        "productId": "1",
+        "status": "Available",
+        "bonusEvents": [],
+        "minRedeemAmount": "",
+        "maxRedeemAmount": "",
+        "duration": "",
+        "term": 0,
+        "swapCoin": "",
+        "swapCoinPrecision": "",
+        "stakeExchangeRate": "",
+        "redeemExchangeRate": "",
+        "rewardDistributionType": "",
+        "rewardIntervalMinute": 0,
+        "redeemProcessingMinute": 0,
+        "stakeTime": "",
+        "interestCalculationTime": "",
+        "hasTieredApr": true,
+        "tierAprDetails": [
+          {
+            "min": "0",
+            "max": "200",
+            "estimateApr": "6.52%"
+          },
+          {
+            "min": "200",
+            "max": "-1",
+            "estimateApr": "1.52%"
+          }
+        ],
+        "remainingPoolAmount": "-1"
+      }
+    ]
+  },
+  "retExtInfo": {},
+  "time": 1783673533830
+}

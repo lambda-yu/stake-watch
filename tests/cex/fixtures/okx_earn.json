@@ -1,0 +1,30 @@
+{
+  "USDT": {
+    "code": "0",
+    "data": [
+      {
+        "avgAmt": "",
+        "avgAmtUsd": "",
+        "avgRate": "0.025",
+        "ccy": "USDT",
+        "estRate": "0.025",
+        "preRate": "0.025"
+      }
+    ],
+    "msg": ""
+  },
+  "USDC": {
+    "code": "0",
+    "data": [
+      {
+        "avgAmt": "",
+        "avgAmtUsd": "",
+        "avgRate": "0.025",
+        "ccy": "USDC",
+        "estRate": "0.025",
+        "preRate": "0.025"
+      }
+    ],
+    "msg": ""
+  }
+}

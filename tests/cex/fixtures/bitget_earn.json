@@ -1,0 +1,6 @@
+{
+  "_status": "needs-scraping",
+  "_reason": "HTTP 400 Invalid ACCESS_KEY - endpoint requires authenticated Bitget API key even for read of savings products. No public alternative found on api.bitget.com or www.bitget.com feeder paths (all returned 400/404).",
+  "_url": "https://api.bitget.com/api/v2/earn/savings/product?filter=available_and_held&coin=USDT",
+  "data": []
+}
