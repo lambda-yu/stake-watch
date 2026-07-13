@@ -141,3 +141,30 @@ class StablecoinMetricsRow(Base):
     cex_spread_pct: Mapped[float] = mapped_column(Float, default=0.0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     __table_args__ = (Index("ix_stablecoin_token", "token"),)
+
+
+class CexEarnRateRow(Base):
+    __tablename__ = "cex_earn_rates"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    venue: Mapped[str] = mapped_column(String(30))
+    asset: Mapped[str] = mapped_column(String(20))
+    product_type: Mapped[str] = mapped_column(String(30), default="flexible")
+    apy_min: Mapped[float] = mapped_column(Float)
+    apy_max: Mapped[float] = mapped_column(Float)
+    tier_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        Index("ix_cex_rates_lookup", "venue", "asset", "product_type", "updated_at"),
+    )
+
+
+class CexVenueRow(Base):
+    __tablename__ = "cex_venues"
+    name: Mapped[str] = mapped_column(String(30), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(50))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    assets_json: Mapped[str] = mapped_column(Text, default='["USDT","USDC"]')
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

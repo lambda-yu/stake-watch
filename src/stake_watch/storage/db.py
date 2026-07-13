@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -9,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from stake_watch.models.common import Chain, PositionType
 from stake_watch.models.position import Position
 from stake_watch.models.protocol import PoolStats, ProtocolStats
-from stake_watch.storage.tables import Base, PositionRow, ProtocolStatsRow, AlertRow
+from stake_watch.storage.tables import Base, PositionRow, ProtocolStatsRow, AlertRow, CexEarnRateRow
 from stake_watch.models.alert import Alert as AlertModel, RuleType, Severity
+from stake_watch.models.cex import CexEarnRate
 
 
 class Storage:
@@ -301,3 +303,48 @@ class Storage:
                 ).order_by(desc(VaultSharePriceRow.created_at)).limit(1))
             row = result.scalar_one_or_none()
             return row.share_price_usd if row else None
+
+    async def insert_cex_rates(self, rates: list[CexEarnRate]) -> None:
+        if not rates:
+            return
+        async with self._session_factory() as session:
+            for r in rates:
+                session.add(CexEarnRateRow(
+                    venue=r.venue, asset=r.asset, product_type=r.product_type,
+                    apy_min=r.apy_min, apy_max=r.apy_max,
+                    tier_note=r.tier_note, raw_json=r.raw_json,
+                    updated_at=r.updated_at,
+                ))
+            await session.commit()
+
+    async def list_latest_cex_rates(self) -> list[CexEarnRateRow]:
+        """Return one row per (venue, asset, product_type), the most recent."""
+        async with self._session_factory() as session:
+            # Grouped max: fetch all rows sorted, then dedupe on the key in Python.
+            # SQLite window-function alternative is overkill for O(venues*assets) rows.
+            result = await session.execute(
+                select(CexEarnRateRow).order_by(CexEarnRateRow.updated_at.desc())
+            )
+            seen: set[tuple[str, str, str]] = set()
+            out: list[CexEarnRateRow] = []
+            for row in result.scalars().all():
+                key = (row.venue, row.asset, row.product_type)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(row)
+            return out
+
+    async def list_cex_history(self, *, venue: str, asset: str,
+                                since: datetime | None = None,
+                                limit: int = 100) -> list[CexEarnRateRow]:
+        async with self._session_factory() as session:
+            q = select(CexEarnRateRow).where(
+                CexEarnRateRow.venue == venue,
+                CexEarnRateRow.asset == asset,
+            )
+            if since is not None:
+                q = q.where(CexEarnRateRow.updated_at >= since)
+            q = q.order_by(CexEarnRateRow.updated_at.desc()).limit(limit)
+            result = await session.execute(q)
+            return list(result.scalars().all())
