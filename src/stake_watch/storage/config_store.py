@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from stake_watch.config import AppSettings, IntervalConfig, RiskConfig, WalletConfig
-from stake_watch.storage.tables import AppSettingsRow, ProtocolConfigRow, RpcEndpointRow, WalletRow
+from stake_watch.storage.tables import AppSettingsRow, ProtocolConfigRow, RpcEndpointRow, WalletRow, CexVenueRow
+from stake_watch.models.cex import CexVenue
 
 class ConfigStore:
     def __init__(self, session_factory: async_sessionmaker):
@@ -131,54 +132,120 @@ class ConfigStore:
             return json.loads(row.value) if row else None
 
     async def import_seed_if_empty(self, seed_path: str = "config/seed.yaml"):
-        """Import seed.yaml into DB if no protocols exist yet."""
+        """Import seed.yaml into DB. Protocol-family seed only runs on an empty
+        protocol table; CEX venues are gated independently so upgrades from
+        pre-CEX installs still seed venue defaults.
+
+        Returns True if any seed branch actually inserted rows, False otherwise.
+        """
         import yaml
         from pathlib import Path
-
-        existing = await self.list_protocols()
-        if existing:
-            return False  # DB already has data
 
         path = Path(seed_path)
         if not path.exists():
             return False
 
         data = yaml.safe_load(path.read_text()) or {}
+        seeded_any = False
 
-        # Import RPC endpoints
-        for chain, rpc_data in data.get("rpc", {}).items():
-            primary = rpc_data if isinstance(rpc_data, str) else rpc_data.get("primary", "")
-            fallback = [] if isinstance(rpc_data, str) else rpc_data.get("fallback", [])
-            await self.upsert_rpc(chain, primary, fallback)
+        # Protocol family (RPC/intervals/risk/protocols/wallets) — only on empty DB
+        existing = await self.list_protocols()
+        if not existing:
+            seeded_any = True
+            # Import RPC endpoints
+            for chain, rpc_data in data.get("rpc", {}).items():
+                primary = rpc_data if isinstance(rpc_data, str) else rpc_data.get("primary", "")
+                fallback = [] if isinstance(rpc_data, str) else rpc_data.get("fallback", [])
+                await self.upsert_rpc(chain, primary, fallback)
 
-        # Import intervals
-        for key, value in data.get("intervals", {}).items():
-            await self.set_setting(f"intervals.{key}", value)
+            # Import intervals
+            for key, value in data.get("intervals", {}).items():
+                await self.set_setting(f"intervals.{key}", value)
 
-        # Import risk thresholds
-        for key, value in data.get("risk", {}).items():
-            await self.set_setting(f"risk.{key}", value)
+            # Import risk thresholds
+            for key, value in data.get("risk", {}).items():
+                await self.set_setting(f"risk.{key}", value)
 
-        # Import protocols
-        for proto in data.get("protocols", []):
-            await self.add_protocol(
-                name=proto["name"], chain=proto["chain"], collector=proto["collector"],
-                enabled=proto.get("enabled", True),
-                safety_rank=proto.get("safety_rank"),
-                safety_score=proto.get("safety_score"),
-                reference_apy=proto.get("reference_apy"),
-                primary_risks=proto.get("primary_risks", []),
-                vault_address=proto.get("vault_address"),
-                defillama_slug=proto.get("defillama_slug"),
-                pool_filter=proto.get("pool_filter"),
-                protocol_type=proto.get("protocol_type"))
+            # Import protocols
+            for proto in data.get("protocols", []):
+                await self.add_protocol(
+                    name=proto["name"], chain=proto["chain"], collector=proto["collector"],
+                    enabled=proto.get("enabled", True),
+                    safety_rank=proto.get("safety_rank"),
+                    safety_score=proto.get("safety_score"),
+                    reference_apy=proto.get("reference_apy"),
+                    primary_risks=proto.get("primary_risks", []),
+                    vault_address=proto.get("vault_address"),
+                    defillama_slug=proto.get("defillama_slug"),
+                    pool_filter=proto.get("pool_filter"),
+                    protocol_type=proto.get("protocol_type"))
 
-        # Import wallets
-        for wallet in data.get("wallets", []):
-            if wallet.get("address"):
-                await self.add_wallet(wallet["chain"], wallet["address"], wallet.get("label"))
+            # Import wallets
+            for wallet in data.get("wallets", []):
+                if wallet.get("address"):
+                    await self.add_wallet(wallet["chain"], wallet["address"], wallet.get("label"))
 
-        return True
+        # CEX venues — independently gated so upgrades still seed
+        existing_cex = await self.list_cex_venues()
+        if not existing_cex and data.get("cex_venues"):
+            seeded_any = True
+            for entry in data.get("cex_venues", []):
+                await self.upsert_cex_venue(CexVenue(**entry))
+
+        return seeded_any
+
+    async def upsert_cex_venue(self, venue: CexVenue) -> CexVenueRow:
+        async with self._sf() as s:
+            now = datetime.now(timezone.utc)
+            row = await s.get(CexVenueRow, venue.name)
+            if row:
+                row.display_name = venue.display_name
+                row.enabled = venue.enabled
+                row.assets_json = json.dumps(venue.assets)
+                row.notes = venue.notes
+                row.updated_at = now
+            else:
+                row = CexVenueRow(
+                    name=venue.name, display_name=venue.display_name,
+                    enabled=venue.enabled,
+                    assets_json=json.dumps(venue.assets),
+                    notes=venue.notes,
+                    created_at=now, updated_at=now,
+                )
+                s.add(row)
+            await s.commit()
+            await s.refresh(row)
+            return row
+
+    async def list_cex_venues(self) -> list[CexVenueRow]:
+        async with self._sf() as s:
+            result = await s.execute(select(CexVenueRow).order_by(CexVenueRow.name))
+            return list(result.scalars().all())
+
+    async def list_enabled_cex_venues(self) -> list[CexVenueRow]:
+        async with self._sf() as s:
+            result = await s.execute(
+                select(CexVenueRow).where(CexVenueRow.enabled == True)  # noqa: E712
+                                  .order_by(CexVenueRow.name))
+            return list(result.scalars().all())
+
+    async def patch_cex_venue(self, name: str, *, enabled: bool | None = None,
+                              assets: list[str] | None = None,
+                              notes: str | None = None) -> CexVenueRow | None:
+        async with self._sf() as s:
+            row = await s.get(CexVenueRow, name)
+            if not row:
+                return None
+            if enabled is not None:
+                row.enabled = enabled
+            if assets is not None:
+                row.assets_json = json.dumps(assets)
+            if notes is not None:
+                row.notes = notes
+            row.updated_at = datetime.now(timezone.utc)
+            await s.commit()
+            await s.refresh(row)
+            return row
 
     async def list_protocol_entries(self) -> list:
         """Return protocols as ProtocolEntry objects for collector building."""

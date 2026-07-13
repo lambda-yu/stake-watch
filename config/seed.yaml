@@ -129,3 +129,10 @@ protocols:
     safety_score: 7.2
     primary_risks: ["Solana risk", "oracle", "liquidation", "market parameters"]
     enabled: true
+
+cex_venues:
+  - { name: binance, display_name: Binance, enabled: false, assets: [USDT, USDC], notes: "needs-scraping: public bapi endpoints 404 from data-center IPs; needs HTML scraping or signed /sapi" }
+  - { name: okx,     display_name: OKX,     enabled: true,  assets: [USDT, USDC] }
+  - { name: bybit,   display_name: Bybit,   enabled: true,  assets: [USDT, USDC] }
+  - { name: gate,    display_name: Gate,    enabled: true,  assets: [USDT, USDC] }
+  - { name: bitget,  display_name: Bitget,  enabled: false, assets: [USDT, USDC], notes: "needs-scraping: public /api/v2/earn/savings/product requires signed auth" }
