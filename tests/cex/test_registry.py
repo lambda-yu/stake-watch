@@ -7,7 +7,6 @@ def _v(name):
     return CexVenue(name=name, display_name=name.upper())
 
 
-@pytest.mark.skip(reason="unskipped by chunk 5 once venue modules exist")
 def test_all_five_resolve():
     for n in ("binance", "okx", "bybit", "gate", "bitget"):
         c = build_cex_collector(_v(n))
