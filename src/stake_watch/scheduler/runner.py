@@ -2,6 +2,9 @@ from __future__ import annotations
 import asyncio
 import logging
 from stake_watch.collectors.base import BaseCollector, CollectResult
+from stake_watch.collectors.cex.registry import build_cex_collector
+from stake_watch.models.cex import CexVenue
+from stake_watch.storage.config_store import ConfigStore
 from stake_watch.storage.db import Storage
 
 logger = logging.getLogger(__name__)
@@ -112,6 +115,7 @@ class ScheduledRunner:
                  protocols_refresh_interval: int = 14400,
                  snapshots_interval: int = 14400,
                  risk_monitor_interval: int = 3600,
+                 cex_rates_interval: int = 1800,
                  screenshot_daily: dict | None = None,
                  storage: Storage | None = None):
         self.collection_runner = collection_runner
@@ -124,6 +128,7 @@ class ScheduledRunner:
         self.protocols_refresh_interval = protocols_refresh_interval
         self.snapshots_interval = snapshots_interval
         self.risk_monitor_interval = risk_monitor_interval
+        self.cex_rates_interval = cex_rates_interval
         self.screenshot_daily = screenshot_daily or {}
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
@@ -212,6 +217,33 @@ class ScheduledRunner:
         except Exception as e:
             logger.error(f"DEX liquidity refresh failed: {e}")
 
+    async def _refresh_cex_rates(self):
+        if not self.storage:
+            return
+        try:
+            import json as _json
+            store = ConfigStore(self.storage._session_factory)
+            venues = await store.list_enabled_cex_venues()
+            pairs = []
+            for v in venues:
+                venue_model = CexVenue(
+                    name=v.name, display_name=v.display_name,
+                    enabled=v.enabled,
+                    assets=_json.loads(v.assets_json or "[]") or ["USDT", "USDC"],
+                    notes=v.notes,
+                )
+                collector = build_cex_collector(venue_model)
+                if collector is not None:
+                    pairs.append((venue_model, collector))
+            snaps = await asyncio.gather(*(c.collect() for _, c in pairs))
+            for snap in snaps:
+                if snap.rates:
+                    await self.storage.insert_cex_rates(snap.rates)
+                for err in snap.errors:
+                    logger.warning("cex[%s]: %s", snap.venue, err)
+        except Exception as e:
+            logger.error(f"CEX rates refresh failed: {e}")
+
     async def _fetch_reserves(self):
         if not self.storage:
             return
@@ -274,6 +306,15 @@ class ScheduledRunner:
                 trigger=IntervalTrigger(seconds=self.dex_liquidity_interval),
                 id="dex_liquidity", name="DEX liquidity", replace_existing=True)
             logger.info(f"DEX liquidity every {self.dex_liquidity_interval}s")
+
+        if self.cex_rates_interval > 0 and self.storage:
+            from datetime import datetime, timezone
+            self._scheduler.add_job(self._refresh_cex_rates,
+                trigger=IntervalTrigger(seconds=self.cex_rates_interval),
+                id="cex_rates", name="CEX Earn rates",
+                replace_existing=True,
+                next_run_time=datetime.now(timezone.utc))  # fire once immediately
+            logger.info(f"CEX rates every {self.cex_rates_interval}s")
 
         if self.reserves_fetch_interval > 0 and self.storage:
             self._scheduler.add_job(self._fetch_reserves,
