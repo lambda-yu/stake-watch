@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from stake_watch.api import deps
 from stake_watch.api.routes import (
-    alerts, backup, comparison, config, positions, protocols, stablecoins, status,
+    alerts, backup, cex, comparison, config, positions, protocols, stablecoins, status,
 )
 from stake_watch.storage.db import Storage
 
@@ -19,4 +19,5 @@ def create_app(storage: Storage) -> FastAPI:
     app.include_router(comparison.router, prefix="/api/comparison", tags=["comparison"])
     app.include_router(positions.router, prefix="/api/positions", tags=["positions"])
     app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
+    app.include_router(cex.router, prefix="/api/cex", tags=["cex"])
     return app
