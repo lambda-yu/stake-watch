@@ -4,6 +4,7 @@ import { Settings } from './pages/Settings';
 import { Protocols } from './pages/Protocols';
 import { Comparison } from './pages/Comparison';
 import { Stablecoins } from './pages/Stablecoins';
+import { Cex } from './pages/Cex';
 import { Alerts } from './pages/Alerts';
 import { Notifications } from './pages/Notifications';
 
@@ -25,6 +26,9 @@ function Layout({ children }: { children: React.ReactNode }) {
           <NavLink to="/stablecoins" className={({ isActive }) =>
             isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
           }>稳定币监控</NavLink>
+          <NavLink to="/cex" className={({ isActive }) =>
+            isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
+          }>CEX 利率</NavLink>
           <NavLink to="/alerts" className={({ isActive }) =>
             isActive ? 'text-blue-400' : 'text-gray-400 hover:text-gray-200'
           }>告警记录</NavLink>
@@ -50,6 +54,7 @@ export default function App() {
           <Route path="/protocols" element={<Protocols />} />
           <Route path="/comparison" element={<Comparison />} />
           <Route path="/stablecoins" element={<Stablecoins />} />
+          <Route path="/cex" element={<Cex />} />
           <Route path="/alerts" element={<Alerts />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/settings" element={<Settings />} />

@@ -138,4 +138,34 @@ export const api = {
     sendReport: () => request<any>('/stablecoins/report/send', { method: 'POST' }),
     collect: () => request<any>('/stablecoins/collect', { method: 'POST' }),
   },
+  cex: {
+    venues: () => request<CexVenue[]>('/cex/venues'),
+    patchVenue: (name: string,
+                 data: { enabled?: boolean; assets?: string[]; notes?: string }) =>
+      request<CexVenue>(`/cex/venues/${name}`,
+        { method: 'PATCH', body: JSON.stringify(data) }),
+    latestRates: () => request<CexRate[]>('/cex/rates/latest'),
+    history: (venue: string, asset: string, limit = 100) =>
+      request<CexRate[]>(
+        `/cex/rates/history?venue=${venue}&asset=${asset}&limit=${limit}`),
+  },
+};
+
+export type CexVenue = {
+  name: string;
+  display_name: string;
+  enabled: boolean;
+  assets: string[];
+  notes: string | null;
+};
+
+export type CexRate = {
+  venue: string;
+  venue_display: string;
+  asset: string;
+  product_type: string;
+  apy_min: number;
+  apy_max: number;
+  tier_note: string | null;
+  updated_at: string;
 };
