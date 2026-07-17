@@ -33,8 +33,11 @@ class CexEarnCollector(ABC):
                 rates = await self._with_retry(self.fetch)
                 return VenueRateSnapshot(venue=self.venue, rates=rates)
             except Exception as e:
-                self.logger.warning("%s: fetch failed: %s", self.venue, e)
-                return VenueRateSnapshot(venue=self.venue, rates=[], errors=[str(e)])
+                # Some HTTP errors (e.g. httpx.ConnectError from a geo-blocked TLS
+                # handshake) stringify to '', so include the exception type name.
+                msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+                self.logger.warning("%s: fetch failed: %s", self.venue, msg)
+                return VenueRateSnapshot(venue=self.venue, rates=[], errors=[msg])
 
     async def _with_retry(self, fn):
         last: BaseException | None = None

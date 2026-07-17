@@ -1,7 +1,11 @@
 """Gate.io Uni-Loan (Simple Earn).
 
-Public endpoint. Returns hourly `min_rate`/`max_rate` per currency;
-we annualize (rate * 24 * 365) to produce APR.
+Public endpoint `/api/v4/earn/uni/rate` returns the current estimated
+annualized rate per currency, `est_rate` as a decimal string
+(e.g. "0.0161" = 1.61% APR).
+
+The `/earn/uni/currencies/{ccy}` endpoint we tried first only returns
+the user-settable min/max offer range, not the market rate — do NOT use it.
 """
 from __future__ import annotations
 import json
@@ -10,8 +14,7 @@ import httpx
 from stake_watch.collectors.cex.base import CexEarnCollector
 from stake_watch.models.cex import CexEarnRate
 
-URL = "https://api.gateio.ws/api/v4/earn/uni/currencies/{ccy}"
-HOURS_PER_YEAR = 24 * 365
+URL = "https://api.gateio.ws/api/v4/earn/uni/rate"
 
 
 class GateEarnCollector(CexEarnCollector):
@@ -19,27 +22,25 @@ class GateEarnCollector(CexEarnCollector):
 
     async def fetch(self) -> list[CexEarnRate]:
         now = datetime.now(timezone.utc)
-        out: list[CexEarnRate] = []
         async with httpx.AsyncClient(timeout=20) as c:
-            for asset in self.assets:
-                r = await c.get(URL.format(ccy=asset))
-                if r.status_code != 200:
-                    continue
-                body = r.json()
-                min_r = float(body.get("min_rate") or 0)
-                max_r = float(body.get("max_rate") or 0)
-                if max_r <= 0:
-                    continue
-                # Gate returns hourly rates; annualize to APR
-                apy_min = min_r * HOURS_PER_YEAR
-                apy_max = max_r * HOURS_PER_YEAR
-                tier_note = (f"hourly {min_r:.8f}–{max_r:.8f}"
-                             if apy_min != apy_max else None)
-                out.append(CexEarnRate(
-                    venue=self.venue, asset=asset,
-                    apy_min=apy_min, apy_max=apy_max,
-                    tier_note=tier_note,
-                    raw_json=json.dumps(body),
-                    updated_at=now,
-                ))
+            r = await c.get(URL)
+            r.raise_for_status()
+            body = r.json()
+        # Body is a flat list [{"currency": "USDT", "est_rate": "0.0161"}, ...]
+        by_ccy = {row.get("currency"): row for row in body if isinstance(row, dict)}
+        out: list[CexEarnRate] = []
+        for asset in self.assets:
+            entry = by_ccy.get(asset)
+            if not entry:
+                continue
+            rate = float(entry.get("est_rate") or 0)
+            if rate <= 0:
+                continue
+            out.append(CexEarnRate(
+                venue=self.venue, asset=asset,
+                apy_min=rate, apy_max=rate,
+                tier_note=None,
+                raw_json=json.dumps(entry),
+                updated_at=now,
+            ))
         return out

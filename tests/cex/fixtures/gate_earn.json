@@ -1,7 +1,6 @@
-{
-  "currency": "USDT",
-  "min_lend_amount": "1",
-  "max_lend_amount": "100000000",
-  "max_rate": "0.00057",
-  "min_rate": "0.00000011"
-}
+[
+  {"est_rate": "0.0161", "currency": "USDT"},
+  {"est_rate": "0.0118", "currency": "USDC"},
+  {"est_rate": "0.0183", "currency": "ETH"},
+  {"est_rate": "0.0010", "currency": "BTC"}
+]

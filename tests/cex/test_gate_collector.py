@@ -2,7 +2,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
-from stake_watch.collectors.cex.gate import GateEarnCollector, HOURS_PER_YEAR
+from stake_watch.collectors.cex.gate import GateEarnCollector
 
 FIX = json.loads((Path(__file__).parent / "fixtures/gate_earn.json").read_text())
 
@@ -18,22 +18,20 @@ class _Resp:
 
 
 @pytest.mark.asyncio
-async def test_gate_annualizes_hourly_rates():
-    # Fixture is USDT-only; USDC path returns 404 and is silently skipped
+async def test_gate_reads_est_rate_per_currency():
     async def _get(url, **kw):
-        if "USDT" in url:
-            return _Resp(FIX)
-        return _Resp({}, code=404)
+        return _Resp(FIX)
 
     with patch("stake_watch.collectors.cex.gate.httpx.AsyncClient") as MC:
         client = MC.return_value.__aenter__.return_value
         client.get = AsyncMock(side_effect=_get)
         rates = await GateEarnCollector(["USDT", "USDC"]).fetch()
 
-    assert len(rates) == 1
-    r = rates[0]
-    assert r.venue == "gate" and r.asset == "USDT"
-    # Fixture: min_rate=0.00000011 max_rate=0.00057 (hourly)
-    assert r.apy_min == pytest.approx(0.00000011 * HOURS_PER_YEAR, rel=1e-6)
-    assert r.apy_max == pytest.approx(0.00057 * HOURS_PER_YEAR, rel=1e-6)
-    assert r.tier_note and "hourly" in r.tier_note
+    by_asset = {r.asset: r for r in rates}
+    assert set(by_asset.keys()) == {"USDT", "USDC"}
+    # USDT est_rate = 0.0161 → 1.61% APR (already decimal, no conversion)
+    assert by_asset["USDT"].apy_min == by_asset["USDT"].apy_max == pytest.approx(0.0161)
+    assert by_asset["USDC"].apy_min == by_asset["USDC"].apy_max == pytest.approx(0.0118)
+    for r in rates:
+        assert r.venue == "gate" and r.product_type == "flexible"
+        assert r.tier_note is None  # untiered
