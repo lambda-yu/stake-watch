@@ -2,7 +2,7 @@
 
 Personal cross-chain DeFi yield monitoring and risk alerting tool. Monitors 10 lending/staking protocols across Solana, Ethereum, BSC, and Base. Provides dedicated USDC/USDT stablecoin risk assessment and deep Morpho monitoring.
 
-**Status:** Active development. 392 tests passing.
+**Status:** Active development. 567 tests passing.
 
 ## Tech Stack
 
@@ -27,6 +27,7 @@ src/stake_watch/
   models/          # Pydantic: Position, ProtocolStats, Alert
   collectors/      # BaseCollector -> DefiLlama, Morpho, Aave, Compound, Sky, Kamino
     registry.py    # Collector factory (dispatches by protocol config)
+    cex/           # CEX Earn rate collectors (OKX, Bybit, Gate; Binance/Bitget stubs)
   storage/         # SQLAlchemy async: positions, protocol_stats, alerts, config
   risk/            # Rule evaluation + cooldown tracker
   alerts/          # Telegram notifier with formatting
