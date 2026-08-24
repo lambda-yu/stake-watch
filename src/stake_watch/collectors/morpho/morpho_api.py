@@ -90,7 +90,8 @@ async def fetch_vault_data(vault_address: str, chain: str = "base") -> dict | No
             "utilization": utilization,
         }
     except Exception as e:
-        logger.error(f"Morpho API error for {vault_address}: {e}")
+        msg = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        logger.error(f"Morpho API error for {vault_address}: {msg}")
         return None
 
 

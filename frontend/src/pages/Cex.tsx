@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, CexVenue, CexRate } from '../api/client';
+import { api, type CexVenue, type CexRate } from '../api/client';
 
 const pct = (x: number) => (x * 100).toFixed(2) + '%';
 
@@ -14,12 +14,32 @@ export function Cex() {
   const [venues, setVenues] = useState<CexVenue[]>([]);
   const [sortDesc, setSortDesc] = useState(true);
   const [manageOpen, setManageOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [flash, setFlash] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const refresh = () => {
     api.cex.latestRates().then(setRates).catch(() => {});
     api.cex.venues().then(setVenues).catch(() => {});
   };
   useEffect(refresh, []);
+
+  const manualRefresh = async () => {
+    setRefreshing(true);
+    setFlash(null);
+    try {
+      const r = await api.cex.refresh();
+      refresh();
+      const errNote = r.errors.length ? `,${r.errors.length} 个错误` : '';
+      setFlash({
+        ok: true,
+        msg: `已刷新 ${r.venues_refreshed} 个 venue,写入 ${r.rates_written} 条${errNote}`,
+      });
+    } catch (e: unknown) {
+      setFlash({ ok: false, msg: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const oldestMin = useMemo(
     () => rates.length ? Math.max(...rates.map(r => minAgo(r.updated_at))) : null,
@@ -35,10 +55,30 @@ export function Cex() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">CEX Earn 利率</h1>
-        <span className="text-sm text-gray-400">
-          {oldestMin !== null ? `${oldestMin} 分钟前刷新` : '暂无数据'}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-400">
+            {oldestMin !== null ? `${oldestMin} 分钟前刷新` : '暂无数据'}
+          </span>
+          <button
+            onClick={manualRefresh}
+            disabled={refreshing}
+            className="text-sm px-3 py-1 rounded border border-blue-500/50
+                       text-blue-300 hover:bg-blue-500/10
+                       disabled:opacity-50 disabled:cursor-not-allowed">
+            {refreshing ? '刷新中…' : '手动刷新'}
+          </button>
+        </div>
       </div>
+
+      {flash && (
+        <div className={`text-sm px-3 py-2 rounded border ${
+          flash.ok
+            ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
+            : 'text-red-300 border-red-500/40 bg-red-500/10'
+        }`}>
+          {flash.msg}
+        </div>
+      )}
 
       <div className="border border-gray-800 rounded overflow-hidden">
         <table className="w-full text-sm">

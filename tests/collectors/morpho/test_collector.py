@@ -1,48 +1,53 @@
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 import pytest
 from stake_watch.collectors.morpho.collector import MorphoCollector
 from stake_watch.models.common import Chain
 
 @pytest.mark.asyncio
-async def test_morpho_collect_protocol_stats():
+async def test_morpho_collect_protocol_stats_uses_graphql_api():
+    """TVL/APY come from Morpho's GraphQL API (1 request), not per-market
+    on-chain reads — the on-chain path made ~40 sequential eth_calls per
+    vault and reliably triggered 429s on the free Base RPC."""
     collector = MorphoCollector(
         chain=Chain.BASE, protocol="morpho_steakhouse_usdc",
         vault_address="0xBEEF", morpho_address="0xMorpho", rpc_url="https://fake")
 
-    mock_vault = MagicMock()
-    mock_morpho = MagicMock()
+    fake_vault_data = {
+        "name": "Steakhouse Prime USDC", "asset": "USDC", "symbol": "steakUSDC",
+        "tvl_usd": 21523923.31, "apy": 4.12, "net_apy": 3.91,
+        "share_price_usd": 1.0537, "withdrawable_usd": 21523923.31,
+        "available_liquidity_usd": 21523923.31, "withdrawable_ratio": 1.0,
+        "utilization": 0.0,
+    }
 
-    # Vault state mocks
-    mock_vault.functions.totalAssets.return_value.call = AsyncMock(return_value=5_000_000_000_000)
-    mock_vault.functions.totalSupply.return_value.call = AsyncMock(return_value=4_900_000_000_000)
-    mock_vault.functions.convertToAssets.return_value.call = AsyncMock(return_value=1_020_408)
-    mock_vault.functions.owner.return_value.call = AsyncMock(return_value="0xOwner")
-    mock_vault.functions.curator.return_value.call = AsyncMock(return_value="0xCurator")
-    mock_vault.functions.guardian.return_value.call = AsyncMock(return_value="0x" + "0" * 40)
-    mock_vault.functions.fee.return_value.call = AsyncMock(return_value=0)
-    mock_vault.functions.timelock.return_value.call = AsyncMock(return_value=86400)
-    mock_vault.functions.supplyQueueLength.return_value.call = AsyncMock(return_value=1)
-    mock_vault.functions.withdrawQueueLength.return_value.call = AsyncMock(return_value=1)
-    mock_vault.functions.withdrawQueue.return_value.call = AsyncMock(return_value=b'\x01' * 32)
-    mock_vault.functions.config.return_value.call = AsyncMock(return_value=(2_000_000_000_000, True, 0))
-
-    # Morpho state mocks
-    mock_morpho.functions.idToMarketParams.return_value.call = AsyncMock(
-        return_value=("0xUSDC", "0xWETH", "0xOracle", "0xIRM", 860000000000000000))
-    mock_morpho.functions.market.return_value.call = AsyncMock(
-        return_value=(1_000_000_000_000, 900_000_000_000, 800_000_000_000, 700_000_000_000, 0, 0))
-    mock_morpho.functions.position.return_value.call = AsyncMock(
-        return_value=(500_000_000_000, 0, 0))
-
-    with patch.object(collector, '_get_contracts', return_value=(mock_vault, mock_morpho)):
+    with patch("stake_watch.collectors.morpho.collector.fetch_vault_data",
+               new=AsyncMock(return_value=fake_vault_data)) as mock_fetch:
         stats = await collector.collect_protocol_stats()
 
+    mock_fetch.assert_awaited_once_with("0xBEEF", "base")
     assert stats.protocol == "morpho_steakhouse_usdc"
     assert stats.chain == Chain.BASE
-    assert stats.tvl_usd > 0
+    assert stats.tvl_usd == Decimal(str(fake_vault_data["tvl_usd"]))
     assert len(stats.pools) == 1
-    assert stats.pools[0].utilization == 0.8
+    assert stats.pools[0].asset == "USDC"
+    assert stats.pools[0].supply_apy == 4.12
+    assert stats.pools[0].utilization == 0.0
+
+
+@pytest.mark.asyncio
+async def test_morpho_collect_protocol_stats_raises_on_empty_response():
+    """fetch_vault_data returning None (vault not found / API error) should
+    surface as an exception so BaseCollector records it as a failure rather
+    than silently persisting zeroed-out stats."""
+    collector = MorphoCollector(
+        chain=Chain.BASE, protocol="morpho_steakhouse_usdc",
+        vault_address="0xBEEF", morpho_address="0xMorpho", rpc_url="https://fake")
+
+    with patch("stake_watch.collectors.morpho.collector.fetch_vault_data",
+               new=AsyncMock(return_value=None)):
+        with pytest.raises(RuntimeError):
+            await collector.collect_protocol_stats()
 
 @pytest.mark.asyncio
 async def test_morpho_collect_positions_empty():

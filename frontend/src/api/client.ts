@@ -148,6 +148,12 @@ export const api = {
     history: (venue: string, asset: string, limit = 100) =>
       request<CexRate[]>(
         `/cex/rates/history?venue=${venue}&asset=${asset}&limit=${limit}`),
+    refresh: () => request<{
+      success: boolean;
+      venues_refreshed: number;
+      rates_written: number;
+      errors: string[];
+    }>('/cex/refresh', { method: 'POST' }),
   },
 };
 

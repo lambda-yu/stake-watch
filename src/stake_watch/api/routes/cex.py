@@ -1,13 +1,18 @@
 from __future__ import annotations
+import asyncio
 import json
+import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from stake_watch.api.deps import get_config_store, get_storage
+from stake_watch.collectors.cex.registry import build_cex_collector
+from stake_watch.models.cex import CexVenue as CexVenueModel
 from stake_watch.storage.config_store import ConfigStore
 from stake_watch.storage.db import Storage
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class VenueOut(BaseModel):
@@ -86,3 +91,50 @@ async def history_rates(venue: str, asset: str, since: datetime | None = None,
         apy_min=r.apy_min, apy_max=r.apy_max,
         tier_note=r.tier_note, updated_at=r.updated_at,
     ) for r in rows]
+
+
+@router.post("/refresh")
+async def refresh_rates(storage: Storage = Depends(get_storage),
+                        store: ConfigStore = Depends(get_config_store)):
+    """Trigger an immediate CEX Earn rates refresh for all enabled venues.
+
+    Mirrors what the scheduler's periodic job does, but on-demand from the UI.
+    """
+    venues = await store.list_enabled_cex_venues()
+    pairs = []
+    for v in venues:
+        model = CexVenueModel(
+            name=v.name, display_name=v.display_name, enabled=v.enabled,
+            assets=json.loads(v.assets_json or "[]") or ["USDT", "USDC"],
+            notes=v.notes,
+        )
+        collector = build_cex_collector(model)
+        if collector is not None:
+            pairs.append((model, collector))
+
+    if not pairs:
+        return {"success": True, "venues_refreshed": 0, "rates_written": 0,
+                "errors": []}
+
+    snaps = await asyncio.gather(*(c.collect() for _, c in pairs),
+                                 return_exceptions=True)
+
+    rates_written = 0
+    errors: list[str] = []
+    for (model, _), snap in zip(pairs, snaps):
+        if isinstance(snap, BaseException):
+            errors.append(f"{model.name}: {snap}")
+            logger.warning("cex refresh %s crashed: %s", model.name, snap)
+            continue
+        if snap.rates:
+            await storage.insert_cex_rates(snap.rates)
+            rates_written += len(snap.rates)
+        for err in snap.errors:
+            errors.append(f"{snap.venue}: {err}")
+
+    return {
+        "success": True,
+        "venues_refreshed": len(pairs),
+        "rates_written": rates_written,
+        "errors": errors,
+    }

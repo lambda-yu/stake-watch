@@ -73,3 +73,66 @@ async def test_history_endpoint_filters(app_ctx):
                     updated_at=now)])
     r = await client.get("/api/cex/rates/history?venue=okx&asset=USDT")
     assert r.status_code == 200 and len(r.json()) == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_endpoint_persists_rates(app_ctx, monkeypatch):
+    """POST /api/cex/refresh runs enabled collectors and writes their rates."""
+    client, storage, store = app_ctx
+    await store.upsert_cex_venue(CexVenue(name="okx", display_name="OKX",
+                                          enabled=True))
+    await store.upsert_cex_venue(CexVenue(name="bybit", display_name="Bybit",
+                                          enabled=False))  # disabled → skipped
+
+    now = datetime.now(timezone.utc)
+
+    class _FakeSnap:
+        def __init__(self, venue, rates, errors=()):
+            self.venue = venue
+            self.rates = rates
+            self.errors = list(errors)
+
+    class _FakeCollector:
+        def __init__(self, venue, apy):
+            self._venue = venue
+            self._apy = apy
+
+        async def collect(self):
+            return _FakeSnap(self._venue, [
+                CexEarnRate(venue=self._venue, asset="USDT",
+                            apy_min=self._apy, apy_max=self._apy,
+                            updated_at=now)
+            ])
+
+    def _fake_build(v):
+        # Only okx should reach here — bybit is disabled and filtered out earlier.
+        assert v.name == "okx"
+        return _FakeCollector(v.name, 0.055)
+
+    monkeypatch.setattr(
+        "stake_watch.api.routes.cex.build_cex_collector", _fake_build
+    )
+
+    r = await client.post("/api/cex/refresh")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["success"] is True
+    assert body["venues_refreshed"] == 1
+    assert body["rates_written"] == 1
+
+    latest = await client.get("/api/cex/rates/latest")
+    rows = latest.json()
+    assert len(rows) == 1
+    assert rows[0]["venue"] == "okx" and rows[0]["apy_max"] == 0.055
+
+
+@pytest.mark.asyncio
+async def test_refresh_endpoint_with_no_enabled_venues(app_ctx):
+    """No enabled venues → success, zero counts, no error."""
+    client, *_ = app_ctx
+    r = await client.post("/api/cex/refresh")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["success"] is True
+    assert body["venues_refreshed"] == 0
+    assert body["rates_written"] == 0
