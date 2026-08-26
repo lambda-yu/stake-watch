@@ -8,6 +8,7 @@ import pytest
 
 from stake_watch.models.alert import Alert, RuleType, Severity
 from stake_watch.risk.protocol_risk_monitor import (
+    _escalation_reason,
     _is_escalation,
     run_risk_monitor,
 )
@@ -25,6 +26,74 @@ from stake_watch.storage.db import Storage
 ])
 def test_is_escalation(old, new, expected):
     assert _is_escalation(old, new) is expected
+
+
+# ---------- _escalation_reason ----------
+
+NO_HISTORY_TEXT = "（无历史维度数据，无法定位具体原因）"
+
+
+def test_escalation_reason_picks_max_positive_delta():
+    old_dims = {"contract": 10, "market": 18, "liquidity": 12}
+    new_dims = [
+        {"key": "contract", "label": "协议与合约", "score": 10, "notes": ""},
+        {"key": "market", "label": "市场与坏账", "score": 50,
+         "notes": "坏账率 0.30%，需关注"},
+        {"key": "liquidity", "label": "提现流动性", "score": 20, "notes": ""},
+    ]
+    reason_line, detail = _escalation_reason(old_dims, new_dims)
+    assert "市场与坏账" in reason_line
+    assert "18" in reason_line and "50" in reason_line
+    assert "坏账率 0.30%，需关注" in reason_line
+    assert detail == {"dimension": "market", "label": "市场与坏账",
+                       "old_score": 18, "new_score": 50, "delta": 32}
+
+
+def test_escalation_reason_ties_broken_by_dimensions_order():
+    # contract (weight 0.20, earlier in DIMENSIONS) and yield (weight 0.05,
+    # later) both move by +10 — contract must win the tie.
+    old_dims = {"contract": 10, "yield": 10}
+    new_dims = [
+        {"key": "contract", "label": "协议与合约", "score": 20, "notes": ""},
+        {"key": "yield", "label": "收益异常", "score": 20, "notes": ""},
+    ]
+    _reason_line, detail = _escalation_reason(old_dims, new_dims)
+    assert detail["dimension"] == "contract"
+
+
+def test_escalation_reason_no_old_dims():
+    reason_line, detail = _escalation_reason(
+        None, [{"key": "market", "label": "市场与坏账", "score": 50, "notes": ""}])
+    assert reason_line == NO_HISTORY_TEXT
+    assert detail is None
+
+
+def test_escalation_reason_empty_new_dims():
+    reason_line, detail = _escalation_reason({"market": 18}, [])
+    assert reason_line == NO_HISTORY_TEXT
+    assert detail is None
+
+
+def test_escalation_reason_no_overlapping_keys():
+    reason_line, detail = _escalation_reason(
+        {"foo": 10}, [{"key": "market", "label": "市场与坏账", "score": 50, "notes": ""}])
+    assert reason_line == NO_HISTORY_TEXT
+    assert detail is None
+
+
+def test_escalation_reason_no_positive_delta():
+    old_dims = {"market": 50}
+    new_dims = [{"key": "market", "label": "市场与坏账", "score": 30, "notes": ""}]
+    reason_line, detail = _escalation_reason(old_dims, new_dims)
+    assert reason_line == NO_HISTORY_TEXT
+    assert detail is None
+
+
+def test_escalation_reason_omits_notes_suffix_when_empty():
+    old_dims = {"market": 18}
+    new_dims = [{"key": "market", "label": "市场与坏账", "score": 50, "notes": ""}]
+    reason_line, _detail = _escalation_reason(old_dims, new_dims)
+    assert reason_line == "主要因：市场与坏账 18→50"
 
 
 # ---------- fixtures ----------

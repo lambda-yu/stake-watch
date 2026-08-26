@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from stake_watch.models.alert import Alert, RuleType, Severity
 from stake_watch.risk.products import PRIMARY_PRODUCT
+from stake_watch.risk.risk_model import DIM_KEYS
 from stake_watch.storage.config_store import ConfigStore
 from stake_watch.storage.db import Storage
 
@@ -30,6 +31,52 @@ def _is_escalation(old: str | None, new: str) -> bool:
     if not old or old not in LEVEL_ORDER or new not in LEVEL_ORDER:
         return False
     return LEVEL_ORDER[new] > LEVEL_ORDER[old]
+
+
+_NO_HISTORY_REASON = "（无历史维度数据，无法定位具体原因）"
+
+
+def _escalation_reason(old_dims: dict[str, float] | None,
+                        new_dims: list[dict]) -> tuple[str, dict | None]:
+    """Identify which risk dimension increased the most since the last
+    evaluation, for use in a level-escalation alert message.
+
+    old_dims: previous {dimension_key: score} snapshot, or None if no prior
+        snapshot with dimension data exists (first-ever evaluation, or a
+        pre-feature `last_evaluation` blob that predates this field).
+    new_dims: current evaluation's `risk_model["dimensions"]` list, each
+        entry shaped like {"key": ..., "label": ..., "score": ..., "notes": ...}.
+
+    Returns (reason_line, escalation_reason_detail). `escalation_reason_detail`
+    is None whenever no dimension could be attributed as the cause (no prior
+    data, no overlapping keys, or no dimension that increased).
+    """
+    if not old_dims or not new_dims:
+        return _NO_HISTORY_REASON, None
+
+    new_by_key = {d["key"]: d for d in new_dims}
+    best_key = None
+    best_delta = 0.0
+    for key in DIM_KEYS:  # fixed, weight-descending order for deterministic tie-break
+        if key not in old_dims or key not in new_by_key:
+            continue
+        delta = new_by_key[key]["score"] - old_dims[key]
+        if delta > best_delta:
+            best_delta = delta
+            best_key = key
+
+    if best_key is None:
+        return _NO_HISTORY_REASON, None
+
+    d = new_by_key[best_key]
+    old_score = old_dims[best_key]
+    new_score = d["score"]
+    notes = d.get("notes") or ""
+    suffix = f"，{notes}" if notes else ""
+    reason_line = f"主要因：{d['label']} {old_score:.0f}→{new_score:.0f}{suffix}"
+    detail = {"dimension": best_key, "label": d["label"],
+              "old_score": old_score, "new_score": new_score, "delta": best_delta}
+    return reason_line, detail
 
 
 async def _cooldown_blocks(storage: Storage, *, protocol: str, chain: str,
