@@ -111,7 +111,7 @@ async def store(storage):
     return ConfigStore(storage._session_factory)
 
 
-def _status_block(level, total=25.0, veto=None, error=False):
+def _status_block(level, total=25.0, veto=None, error=False, dimensions=None):
     if error:
         return {"score": 0, "level": "critical", "checks": [],
                  "risk_model": {"error": "boom"}, "updated_at": None}
@@ -119,7 +119,7 @@ def _status_block(level, total=25.0, veto=None, error=False):
              "risk_model": {"total": total, "level": level,
                               "veto_flags": veto or [],
                               "primary_chain": "base", "primary_asset": "USDC",
-                              "apy": 5.0, "dimensions": []},
+                              "apy": 5.0, "dimensions": dimensions or []},
              "updated_at": None}
 
 
@@ -219,6 +219,23 @@ async def test_last_evaluation_full_block_persisted(store, storage):
     assert ev["level"] == "C"
     assert ev["veto_flags"] == ["foo"]
     assert "evaluated_at" in ev
+
+
+@pytest.mark.asyncio
+async def test_last_evaluation_persists_dimensions(store, storage):
+    """Dimension scores must be snapshotted every run so the NEXT run can
+    diff against them to explain a future escalation."""
+    from stake_watch.risk.risk_model import DIM_KEYS
+
+    await store.add_protocol(name="aave_v3_base", chain="base",
+                              collector="defillama")
+    dims = [{"key": k, "label": k, "weight": 0.1, "score": 20.0,
+             "notes": "", "source": "curated"} for k in DIM_KEYS]
+    block = _status_block("B", dimensions=dims)
+    with _patch_evaluate({"aave_v3_base": block}):
+        await run_risk_monitor(storage, store, cooldown_minutes=0)
+    ev = await store.get_setting("risk_monitor.last_evaluation.aave_v3_base")
+    assert ev["dimensions"] == {k: 20.0 for k in DIM_KEYS}
 
 
 # ---------- cooldown ----------

@@ -186,11 +186,13 @@ async def run_risk_monitor(storage: Storage, config_store: ConfigStore,
         # alongside the cached baseline (and so escalation deltas survive restarts).
         if level:
             await config_store.set_setting(f"risk_monitor.last_level.{p.name}", level)
+            dims_snapshot = {d["key"]: d["score"] for d in (rm.get("dimensions") or [])}
             await config_store.set_setting(
                 f"risk_monitor.last_evaluation.{p.name}",
                 {"total": rm.get("total"), "level": level,
                  "veto_flags": veto_flags,
                  "primary_chain": chain, "primary_asset": asset,
+                 "dimensions": dims_snapshot,
                  "evaluated_at": datetime.now(timezone.utc).isoformat()})
 
     return emitted
