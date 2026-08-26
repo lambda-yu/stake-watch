@@ -42,41 +42,47 @@ source}`) already present in the `status["risk_model"]` block returned by
 
 ### 2. Read prior dimensions before overwriting
 
-Currently the monitor reads only `risk_monitor.last_level.{name}` (a bare
-string) for the escalation check. Switch to reading the full
-`risk_monitor.last_evaluation.{name}` dict instead — it already contains
-`level`, and after step 1 will also contain the previous `dimensions`. This
-replaces the separate `last_level` read (the `level` field inside
-`last_evaluation` serves the same purpose), but keep `last_level` write/read
-as-is for backward compatibility with anything else relying on it — no other
-consumers found in the codebase, so this is just an internal read-path swap
-with no external contract change.
+Keep the existing `risk_monitor.last_level.{name}` read exactly as-is — it
+remains the sole input to `_is_escalation(last_level, level)`. Do not touch
+this path; escalation detection must keep working even when
+`last_evaluation.{name}` doesn't exist yet (e.g. upgrading from a pre-feature
+install that only ever wrote `last_level`).
+
+Additionally, read `risk_monitor.last_evaluation.{name}` (the full dict) as a
+*separate, independent* lookup, used only to source `old_dims` for the reason
+text in step 3. This value may be `None` (key never written) or present but
+missing a `dimensions` field (written by a pre-feature version of this code).
+Both cases are treated identically: `old_dims = None`.
 
 ### 3. Compute the escalation reason
 
 At the point `_is_escalation(last_level, level)` is true:
 
-- Let `old_dims = prior_last_evaluation.get("dimensions")` (may be `None` if
-  this is the first evaluation ever recorded for this protocol, e.g. right
-  after deploying this feature).
-- Let `new_dims = {d["key"]: d["score"] for d in rm.get("dimensions", [])}`.
-- If `old_dims` is present: for each key in `risk_model.DIMENSIONS` order,
-  compute `delta = new_dims[k] - old_dims.get(k, new_dims[k])` (missing old
-  key → treat as no change, delta 0). Pick the key with the max delta
-  (ties broken by `DIMENSIONS` declaration order, which is already
-  weight-descending). Only treat it as "the reason" if `delta > 0` — if no
-  dimension increased (edge case: total rose from rounding/PRODUCT_TOTAL
-  interpolation without a clear per-dim mover), fall back to the no-history
-  message.
+- Let `old_dims = prior_last_evaluation.get("dimensions") if prior_last_evaluation else None`
+  (`None` if this is the first evaluation ever recorded for this protocol, or
+  a pre-feature `last_evaluation` without a `dimensions` field).
+- Let `new_dims = {d["key"]: d["score"] for d in rm.get("dimensions", [])}`
+  (may be `{}` if `rm["dimensions"]` is empty/absent).
+- If `old_dims` is present **and** `new_dims` is non-empty: for each key
+  present in *both* `old_dims` and `new_dims`, compute
+  `delta = new_dims[k] - old_dims[k]`. Keys missing from either side are
+  skipped (not treated as zero-delta candidates). Pick the key with the max
+  delta among the remaining candidates (ties broken by `DIMENSIONS`
+  declaration order, which is already weight-descending). Only treat it as
+  "the reason" if `delta > 0` and at least one candidate key existed — if no
+  dimension increased, or there were no overlapping keys, fall back to the
+  no-history message.
 - Build a human-readable line using the dimension's `label` and `notes`
   already present in `rm["dimensions"]` for the *new* evaluation:
   ```
   主要因：{label} {old_score:.0f}→{new_score:.0f}{f'，{notes}' if notes else ''}
   ```
   Example: `主要因：市场与坏账 18→50，坏账率 0.30%，需关注`
-- If `old_dims` is `None`: reason line is the fixed string
-  `（无历史维度数据，无法定位具体原因）`. The alert is still emitted (per
-  user decision) — just without an attributable cause.
+- In every other case (no attributable dimension found — covers `old_dims is
+  None`, `new_dims` empty, no overlapping keys, or no key with `delta > 0`):
+  reason line is the fixed string `（无历史维度数据，无法定位具体原因）`.
+  The alert is still emitted (per user decision) — just without an
+  attributable cause.
 
 ### 4. Wire into the alert
 
@@ -91,8 +97,9 @@ At the point `_is_escalation(last_level, level)` is true:
   {"dimension": key, "label": label, "old_score": old_score,
    "new_score": new_score, "delta": delta} | None
   ```
-  (`None` when no prior dimensions existed). This lets the frontend or other
-  consumers render the reason without re-parsing the message string.
+  (`None` whenever the fallback "no attributable cause" text is used — see
+  step 3's fallback conditions). This lets the frontend or other consumers
+  render the reason without re-parsing the message string.
 
 ### 5. No change to veto-triggered alerts
 
@@ -115,12 +122,14 @@ Extend `tests/risk/test_protocol_risk_monitor.py`:
    matching the 8 `DIM_KEYS`.
 4. Update existing `_status_block()` test helper to accept an optional
    `dimensions` list so old tests (which pass `dimensions: []`) keep passing
-   — when `dimensions` is empty, `new_dims` is `{}` and delta computation
-   naturally falls back to "no dimension increased" behavior, but since this
-   only affects the *message wording* of already-passing escalation tests,
-   verify none of them assert on the exact message content beyond what's
-   already covered (checked: they only assert `title` and `severity`, so
-   safe).
+   — when `dimensions` is empty, `new_dims` is `{}`, which per step 3 has no
+   overlapping keys with `old_dims` (or `old_dims` is itself `None` since
+   these tests never seed `last_evaluation.dimensions`), so the code takes
+   the "no attributable cause" fallback branch without raising. This only
+   affects the *message wording* of already-passing escalation tests;
+   verified none of them assert on exact message content beyond `title` and
+   `severity` (checked against `test_protocol_risk_monitor.py:97-126`), so
+   they remain green unmodified.
 
 ## Non-goals
 
