@@ -54,13 +54,16 @@ def _escalation_reason(old_dims: dict[str, float] | None,
     if not old_dims or not new_dims:
         return _NO_HISTORY_REASON, None
 
-    new_by_key = {d["key"]: d for d in new_dims}
+    new_by_key = {d["key"]: d for d in new_dims if "key" in d}
     best_key = None
     best_delta = 0.0
     for key in DIM_KEYS:  # fixed, weight-descending order for deterministic tie-break
         if key not in old_dims or key not in new_by_key:
             continue
-        delta = new_by_key[key]["score"] - old_dims[key]
+        d = new_by_key[key]
+        if "score" not in d:
+            continue
+        delta = d["score"] - old_dims[key]
         if delta > best_delta:
             best_delta = delta
             best_key = key
@@ -71,10 +74,11 @@ def _escalation_reason(old_dims: dict[str, float] | None,
     d = new_by_key[best_key]
     old_score = old_dims[best_key]
     new_score = d["score"]
+    label = d.get("label", best_key)
     notes = d.get("notes") or ""
     suffix = f"，{notes}" if notes else ""
-    reason_line = f"主要因：{d['label']} {old_score:.0f}→{new_score:.0f}{suffix}"
-    detail = {"dimension": best_key, "label": d["label"],
+    reason_line = f"主要因：{label} {old_score:.0f}→{new_score:.0f}{suffix}"
+    detail = {"dimension": best_key, "label": label,
               "old_score": old_score, "new_score": new_score, "delta": best_delta}
     return reason_line, detail
 
@@ -158,17 +162,24 @@ async def run_risk_monitor(storage: Storage, config_store: ConfigStore,
         # 2. Risk level escalation → WARNING (or CRITICAL on E)
         last_level = await config_store.get_setting(f"risk_monitor.last_level.{p.name}")
         if _is_escalation(last_level, level):
+            prior_evaluation = await config_store.get_setting(
+                f"risk_monitor.last_evaluation.{p.name}")
+            old_dims = (prior_evaluation or {}).get("dimensions")
+            reason_line, escalation_reason = _escalation_reason(
+                old_dims, rm.get("dimensions") or [])
             severity = Severity.CRITICAL if level == "E" else Severity.WARNING
             alert = Alert(
                 rule_type=RuleType.PROTOCOL_EVENT,
                 severity=severity,
                 protocol=p.name, chain=chain,
                 title=f"{p.name} 风险等级 {last_level} → {level}",
-                message=f"综合风险评分 {rm.get('total')}，等级从 {last_level} 升至 {level}",
+                message=(f"综合风险评分 {rm.get('total')}，"
+                         f"等级从 {last_level} 升至 {level}\n{reason_line}"),
                 details={"monitor_kind": "level_escalation",
                          "risk_total": rm.get("total"), "old_level": last_level,
                          "new_level": level, "primary_asset": asset,
-                         "veto_flags": veto_flags},
+                         "veto_flags": veto_flags,
+                         "escalation_reason": escalation_reason},
                 created_at=datetime.now(timezone.utc),
             )
             if not await _cooldown_blocks(storage, protocol=p.name, chain=chain,

@@ -186,6 +186,64 @@ async def test_level_escalation_to_e_is_critical(store, storage):
 
 
 @pytest.mark.asyncio
+async def test_escalation_alert_includes_reason_with_prior_dimensions(store, storage):
+    await store.add_protocol(name="aave_v3_base", chain="base",
+                              collector="defillama")
+    await store.set_setting("risk_monitor.last_level.aave_v3_base", "A")
+    await store.set_setting("risk_monitor.last_evaluation.aave_v3_base", {
+        "total": 17.0, "level": "A", "veto_flags": [],
+        "primary_chain": "base", "primary_asset": "USDC",
+        "dimensions": {"contract": 10, "market": 18, "liquidity": 12,
+                        "collateral_oracle": 18, "governance": 10,
+                        "stablecoin": 12, "chain": 5, "yield": 10},
+        "evaluated_at": "2026-08-01T00:00:00+00:00",
+    })
+    new_dims = [
+        {"key": "contract", "label": "协议与合约", "weight": 0.20, "score": 10,
+         "notes": "", "source": "curated"},
+        {"key": "market", "label": "市场与坏账", "weight": 0.20, "score": 50,
+         "notes": "坏账率 0.30%，需关注", "source": "live"},
+        {"key": "liquidity", "label": "提现流动性", "weight": 0.15, "score": 12,
+         "notes": "", "source": "curated"},
+        {"key": "collateral_oracle", "label": "抵押品/预言机", "weight": 0.15,
+         "score": 18, "notes": "", "source": "curated"},
+        {"key": "governance", "label": "管理与治理", "weight": 0.10, "score": 10,
+         "notes": "", "source": "curated"},
+        {"key": "stablecoin", "label": "稳定币资产", "weight": 0.08, "score": 12,
+         "notes": "", "source": "curated"},
+        {"key": "chain", "label": "链与基础设施", "weight": 0.07, "score": 5,
+         "notes": "", "source": "curated"},
+        {"key": "yield", "label": "收益异常", "weight": 0.05, "score": 10,
+         "notes": "", "source": "curated"},
+    ]
+    block = _status_block("C", total=31.0, dimensions=new_dims)
+    with _patch_evaluate({"aave_v3_base": block}):
+        alerts = await run_risk_monitor(storage, store, cooldown_minutes=0)
+    assert len(alerts) == 1
+    a = alerts[0]
+    assert "市场与坏账" in a.message
+    assert "18→50" in a.message
+    assert "坏账率 0.30%，需关注" in a.message
+    assert a.details["escalation_reason"] == {
+        "dimension": "market", "label": "市场与坏账",
+        "old_score": 18, "new_score": 50, "delta": 32}
+
+
+@pytest.mark.asyncio
+async def test_escalation_alert_falls_back_without_prior_dimensions(store, storage):
+    await store.add_protocol(name="aave_v3_base", chain="base",
+                              collector="defillama")
+    await store.set_setting("risk_monitor.last_level.aave_v3_base", "A")
+    # No last_evaluation seeded at all — simulates a pre-feature install where
+    # only last_level was ever recorded.
+    with _patch_evaluate({"aave_v3_base": _status_block("C")}):
+        alerts = await run_risk_monitor(storage, store, cooldown_minutes=0)
+    assert len(alerts) == 1
+    assert "无历史维度数据" in alerts[0].message
+    assert alerts[0].details["escalation_reason"] is None
+
+
+@pytest.mark.asyncio
 async def test_level_drop_does_not_alert(store, storage):
     await store.add_protocol(name="aave_v3_base", chain="base",
                               collector="defillama")
