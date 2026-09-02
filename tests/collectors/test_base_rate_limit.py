@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime, timezone
 from decimal import Decimal
 
+import httpx
 import pytest
 
 from stake_watch.collectors.base import (
@@ -80,6 +81,15 @@ async def test_non_ratelimit_error_does_not_retry():
     result = await c.collect("")
     assert c.calls == 1  # no retry
     assert result.protocol_stats is None
+
+
+@pytest.mark.asyncio
+async def test_retries_on_transient_network_error_then_succeeds():
+    c = _Stub(fail_times=2, exc=httpx.ConnectTimeout("connect timed out"))
+    result = await c.collect("")
+    assert c.calls == 3
+    assert result.protocol_stats is not None
+    assert result.errors == []
 
 
 # ---------- per-chain semaphore ----------

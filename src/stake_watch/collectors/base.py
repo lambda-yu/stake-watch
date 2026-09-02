@@ -3,6 +3,7 @@ import asyncio
 import logging
 import random
 from abc import ABC, abstractmethod
+import httpx
 from pydantic import BaseModel
 from stake_watch.models.common import Chain
 from stake_watch.models.position import Position
@@ -28,6 +29,13 @@ def _looks_like_rate_limit(err: BaseException) -> bool:
     s = str(err).lower()
     return ("429" in s or "too many requests" in s or "rate limit" in s
              or "exceeded" in s and "limit" in s)
+
+
+def _is_retryable(err: BaseException) -> bool:
+    """Rate-limit-shaped errors and transient httpx network errors (timeouts,
+    connection resets) are worth retrying; other failures (bad input, HTTP
+    4xx/5xx status raised via raise_for_status(), parsing bugs) are not."""
+    return _looks_like_rate_limit(err) or isinstance(err, httpx.TransportError)
 
 
 class CollectResult(BaseModel):
@@ -63,7 +71,7 @@ class BaseCollector(ABC):
                 return await coro_factory()
             except Exception as e:
                 last_exc = e
-                if not _looks_like_rate_limit(e):
+                if not _is_retryable(e):
                     raise
                 if attempt == self._rate_limit_retries - 1:
                     break
