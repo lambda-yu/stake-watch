@@ -42,6 +42,7 @@ class CollectResult(BaseModel):
     positions: list[Position] = []
     protocol_stats: ProtocolStats | None = None
     errors: list[str] = []
+    is_network_error: bool = False
 
 class BaseCollector(ABC):
     # Default: 3 tries with exponential-plus-jitter backoff on 429 / rate limit.
@@ -88,6 +89,7 @@ class BaseCollector(ABC):
         errors: list[str] = []
         positions: list[Position] = []
         protocol_stats: ProtocolStats | None = None
+        is_network_error = False
         # Cap concurrent RPC pressure on the same chain.
         async with _get_chain_semaphore(self.chain):
             if wallet:
@@ -98,6 +100,7 @@ class BaseCollector(ABC):
                     msg = f"{self.protocol}: positions collection failed: {e}"
                     self.logger.error(msg)
                     errors.append(msg)
+                    is_network_error = is_network_error or isinstance(e, httpx.TransportError)
             try:
                 protocol_stats = await self._with_rate_limit_retry(
                     self.collect_protocol_stats, "stats collection")
@@ -105,4 +108,6 @@ class BaseCollector(ABC):
                 msg = f"{self.protocol}: stats collection failed: {e}"
                 self.logger.error(msg)
                 errors.append(msg)
-        return CollectResult(positions=positions, protocol_stats=protocol_stats, errors=errors)
+                is_network_error = is_network_error or isinstance(e, httpx.TransportError)
+        return CollectResult(positions=positions, protocol_stats=protocol_stats, errors=errors,
+                              is_network_error=is_network_error)

@@ -92,6 +92,22 @@ async def test_retries_on_transient_network_error_then_succeeds():
     assert result.errors == []
 
 
+@pytest.mark.asyncio
+async def test_marks_result_as_network_error_when_retries_exhausted_on_transport_error():
+    c = _Stub(fail_times=99, exc=httpx.ConnectError("boom"))
+    result = await c.collect("")
+    assert result.protocol_stats is None
+    assert result.is_network_error is True
+
+
+@pytest.mark.asyncio
+async def test_does_not_mark_network_error_for_non_network_failure():
+    c = _Stub(fail_times=99, exc=ValueError("bad input"))
+    result = await c.collect("")
+    assert result.protocol_stats is None
+    assert result.is_network_error is False
+
+
 # ---------- per-chain semaphore ----------
 
 @pytest.mark.asyncio

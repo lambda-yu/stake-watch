@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import httpx
 from stake_watch.collectors.base import BaseCollector, CollectResult
 from stake_watch.collectors.cex.registry import build_cex_collector
 from stake_watch.models.cex import CexVenue
@@ -19,7 +20,8 @@ class CollectionRunner:
         self._consecutive_failures: dict[str, int] = {}
         self.failure_alert_threshold = 3  # 3 consecutive failures before alerting
 
-    async def _on_collector_failure(self, collector: BaseCollector, error: str):
+    async def _on_collector_failure(self, collector: BaseCollector, error: str,
+                                      is_network_error: bool = False):
         proto = collector.protocol
         self._consecutive_failures[proto] = self._consecutive_failures.get(proto, 0) + 1
         if self._consecutive_failures[proto] != self.failure_alert_threshold:
@@ -40,6 +42,11 @@ class CollectionRunner:
                 created_at=datetime.now(timezone.utc),
             )
             await self.storage.save_alert(alert)
+            # Transient network failures (timeouts, connection resets) recur on
+            # flaky upstreams and self-resolve; don't page for them. Only
+            # push non-network failures (parsing bugs, unexpected 4xx/5xx).
+            if is_network_error:
+                return
             # Best-effort Telegram push
             try:
                 from stake_watch.storage.config_store import ConfigStore
@@ -64,15 +71,18 @@ class CollectionRunner:
             if result.errors:
                 for err in result.errors:
                     logger.warning(err)
-                await self._on_collector_failure(collector, "; ".join(result.errors)[:500])
+                await self._on_collector_failure(
+                    collector, "; ".join(result.errors)[:500],
+                    is_network_error=result.is_network_error)
             else:
                 # success → reset counter so future failures can re-alert
                 self._consecutive_failures.pop(collector.protocol, None)
             return result
         except Exception as e:
             logger.error(f"{collector.protocol}: unhandled error: {e}")
-            await self._on_collector_failure(collector, str(e))
-            return CollectResult(errors=[str(e)])
+            is_network_error = isinstance(e, httpx.TransportError)
+            await self._on_collector_failure(collector, str(e), is_network_error=is_network_error)
+            return CollectResult(errors=[str(e)], is_network_error=is_network_error)
 
     # Hard cap per (collector, wallet) invocation. Beyond this the run is
     # considered hung (e.g. web3.py's AsyncHTTPProvider has no default read
